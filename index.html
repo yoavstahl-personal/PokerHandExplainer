@@ -65,9 +65,11 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .seat .sbb { font-size: 8px; color: var(--accent); font-weight: 700; }
 
 .community-cards { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); display: flex; gap: 3px; pointer-events: none; }
-.mini-card { width: 21px; height: 29px; background: white; border-radius: 3px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 8px; font-weight: 700; border: 1px solid #ccc; line-height: 1.1; }
-.mini-card.red { color: #c00; }
-.mini-card.back { background: #1a3a8f; }
+.mini-card { position: relative; width: 26px; height: 36px; background: linear-gradient(160deg,#fff,#eef0f5); border-radius: 4px; border: 1px solid #c8ccd6; box-shadow: 0 1px 3px rgba(0,0,0,.5); font-family: Georgia, 'Times New Roman', serif; color: var(--card-black); overflow: hidden; }
+.mini-card .mc-rank { position: absolute; top: 1px; left: 2px; font-size: 9px; font-weight: 800; line-height: 1; }
+.mini-card .mc-suit { position: absolute; bottom: 0px; right: 1px; font-size: 14px; line-height: 1; }
+.mini-card.red { color: var(--card-red); }
+.mini-card.back { background: repeating-linear-gradient(45deg,#1a3a8f,#1a3a8f 4px,#264aa0 4px,#264aa0 8px); border-color: #16306f; }
 .pot-badge { position: absolute; top: 32%; left: 50%; transform: translate(-50%,-50%); background: rgba(0,0,0,.6); border: 1px solid var(--accent); border-radius: 20px; padding: 2px 10px; font-size: 11px; color: var(--accent); font-weight: 700; pointer-events: none; white-space: nowrap; }
 
 /* ── FORMS ─── */
@@ -102,39 +104,56 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .villain-item input { width: 76px; padding: 8px 10px; border-radius: 8px; background: #111; border: 1px solid #333; color: var(--accent); font-size: 14px; font-weight: 700; text-align: right; outline: none; flex-shrink: 0; }
 .villain-item input:focus { border-color: var(--accent); }
 
-/* ── VISUAL CARD PICKER ─── */
-.card-slots-row { display: flex; gap: 10px; justify-content: center; padding: 4px 0; }
-.card-slot {
-  width: 52px; height: 72px; border-radius: 7px;
-  background: #1a1a1a; border: 2px dashed #3a3a3a;
-  display: flex; flex-direction: column; align-items: center; justify-content: center;
-  cursor: pointer; transition: all .2s; gap: 1px;
+/* ── REUSABLE PLAYING CARD ─── */
+.pcard {
+  position: relative; width: 100%; height: 100%; border-radius: 8px;
+  background: linear-gradient(157deg,#ffffff 0%,#eef0f6 100%);
+  color: var(--card-black); font-family: Georgia,'Times New Roman',serif;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,.12), 0 3px 7px rgba(0,0,0,.45);
 }
-.card-slot.focused { border-color: var(--accent); border-style: solid; box-shadow: 0 0 0 2px rgba(232,200,74,.3); }
-.card-slot.filled { background: white; border-style: solid; border-color: #ccc; }
-.card-slot.filled.red { }
-.card-slot .cr { font-size: 20px; font-weight: 900; line-height: 1; color: var(--card-black); }
-.card-slot .cs { font-size: 20px; line-height: 1; color: var(--card-black); }
-.card-slot.red .cr, .card-slot.red .cs { color: var(--card-red); }
-.card-slot .empty-hint { font-size: 9px; color: var(--muted); }
+.pcard.red { color: var(--card-red); }
+.pc-corner { position: absolute; display: flex; flex-direction: column; align-items: center; line-height: .82; font-weight: 800; }
+.pc-corner.tl { top: 6%; left: 8%; }
+.pc-corner.br { bottom: 6%; right: 8%; transform: rotate(180deg); }
+.pc-corner .pc-rank { font-size: 1em; letter-spacing: -.5px; }
+.pc-corner .pc-suit { font-size: .82em; }
+.pc-center { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; font-size: 2.5em; filter: drop-shadow(0 1px 1px rgba(0,0,0,.12)); }
+
+/* ── VISUAL CARD PICKER ─── */
+.card-slots-row { display: flex; gap: 12px; justify-content: center; padding: 6px 0; }
+.card-slot {
+  width: 70px; height: 98px; border-radius: 9px;
+  background: #14141c; border: 2px dashed #3a3a3a;
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  cursor: pointer; transition: all .2s; position: relative; overflow: hidden;
+  font-size: 16px;
+}
+.card-slot.focused { border-color: var(--accent); border-style: solid; box-shadow: 0 0 0 3px rgba(232,200,74,.35); }
+.card-slot.filled { border-color: transparent; border-style: solid; }
+.card-slot .empty-q { font-size: 28px; color: #3a3a3a; font-weight: 900; line-height: 1; }
+.card-slot .empty-hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
 /* ── CARD DECK GRID ─── */
-.card-deck { width: 100%; display: flex; flex-direction: column; gap: 3px; }
-.deck-row { display: flex; gap: 2px; align-items: stretch; }
-.deck-suit-label { width: 22px; display: flex; align-items: center; justify-content: center; font-size: 17px; flex-shrink: 0; line-height: 1; }
-.deck-suit-cards { display: grid; grid-template-columns: repeat(13, 1fr); gap: 2px; flex: 1; }
+.card-deck { width: 100%; display: flex; flex-direction: column; gap: 4px; }
+.deck-row { display: flex; gap: 3px; align-items: stretch; }
+.deck-suit-label { width: 24px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; line-height: 1; }
+.deck-suit-label.red { color: var(--card-red); }
+.deck-suit-label.black { color: #e8e8ee; }
+.deck-suit-cards { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; flex: 1; }
 .card-cell {
-  aspect-ratio: 7/10; border-radius: 4px; background: #fff;
-  border: 1.5px solid #ccc; display: flex; flex-direction: column;
-  align-items: center; justify-content: center; cursor: pointer;
-  font-size: clamp(8px, 2.5vw, 12px); font-weight: 900; color: var(--card-black);
-  line-height: 1; min-height: 36px; transition: all .1s; user-select: none;
+  position: relative; aspect-ratio: 7/10; min-height: 44px; border-radius: 5px;
+  background: linear-gradient(157deg,#ffffff,#eaecf3);
+  border: 1px solid #c4c8d2; box-shadow: 0 1px 2px rgba(0,0,0,.4);
+  cursor: pointer; color: var(--card-black);
+  font-family: Georgia,'Times New Roman',serif; transition: transform .1s, box-shadow .1s;
+  user-select: none; overflow: hidden;
 }
-.card-cell .cc-rank { line-height: 1; }
-.card-cell .cc-suit { font-size: .85em; line-height: 1; }
+.card-cell .cc-rank { position: absolute; top: 2px; left: 3px; font-size: clamp(9px,2.6vw,13px); font-weight: 800; line-height: 1; }
+.card-cell .cc-suit { position: absolute; bottom: 0px; right: 2px; font-size: clamp(12px,3.6vw,18px); line-height: 1; }
 .card-cell.red { color: var(--card-red); }
-.card-cell.selected { background: var(--accent); border-color: #b89600; color: #000; transform: scale(1.08); z-index: 1; }
-.card-cell.used { opacity: .14; pointer-events: none; }
+.card-cell.selected { box-shadow: 0 0 0 3px var(--accent), 0 2px 8px rgba(232,200,74,.5); transform: scale(1.12); z-index: 2; }
+.card-cell.selected::after { content: '✓'; position: absolute; top: 1px; right: 2px; font-size: 9px; color: #1a8a3a; font-weight: 900; }
+.card-cell.used { opacity: .16; pointer-events: none; filter: grayscale(1); }
 .card-cell:active:not(.used) { transform: scale(.9); }
 
 /* ── ACTION LOG ─── */
@@ -482,6 +501,21 @@ function fmtBB(n) {
 }
 function isRed(sym) { return sym==='♥'||sym==='♦'; }
 function cardKey(c) { return c&&c.rank&&c.suit ? c.rank+c.suit : null; }
+// Full playing-card face (corners + big center suit). Fills its container.
+function cardFace(rank, suit) {
+  const red = isRed(suit) ? ' red' : '';
+  return `<div class="pcard${red}">`
+    + `<div class="pc-corner tl"><span class="pc-rank">${rank}</span><span class="pc-suit">${suit}</span></div>`
+    + `<div class="pc-center">${suit}</div>`
+    + `<div class="pc-corner br"><span class="pc-rank">${rank}</span><span class="pc-suit">${suit}</span></div>`
+    + `</div>`;
+}
+// Small table card (corner rank + suit)
+function miniCardHTML(card) {
+  if (card && card.rank && card.suit)
+    return `<div class="mini-card${isRed(card.suit)?' red':''}"><span class="mc-rank">${card.rank}</span><span class="mc-suit">${card.suit}</span></div>`;
+  return `<div class="mini-card back"></div>`;
+}
 function usedCards() {
   const used = new Set();
   const all = [S.heroCards[0], S.heroCards[1],
@@ -620,9 +654,9 @@ function renderSlots() {
     slot.className='card-slot'+(filled?' filled':'')+(red?' red':'')+(focusIdx===i?' focused':'');
     slot.onclick=()=>{ S.picker.focusIdx=i; renderSlots(); renderDeck(); };
     if(filled){
-      slot.innerHTML=`<span class="cr">${card.rank}</span><span class="cs">${card.suit}</span>`;
+      slot.innerHTML=cardFace(card.rank, card.suit);
     } else {
-      slot.innerHTML=`<span style="font-size:20px;color:#444">?</span><span class="empty-hint">Card ${i+1}</span>`;
+      slot.innerHTML=`<span class="empty-q">?</span><span class="empty-hint">Card ${i+1}</span>`;
     }
     el.appendChild(slot);
   });
@@ -642,8 +676,7 @@ function renderDeck() {
   SUITS.forEach(suit=>{
     const row=document.createElement('div'); row.className='deck-row';
     const lbl=document.createElement('div');
-    lbl.className='deck-suit-label'; lbl.textContent=suit.sym;
-    lbl.style.color=suit.red?'var(--card-red)':'var(--card-black)';
+    lbl.className='deck-suit-label '+(suit.red?'red':'black'); lbl.textContent=suit.sym;
     row.appendChild(lbl);
     const grid=document.createElement('div'); grid.className='deck-suit-cards';
     RANKS.forEach(rank=>{
@@ -806,16 +839,9 @@ function updatePotBadge() {
 }
 
 function updateCommunityOnTable() {
-  const el=$('communityCardsEl'); el.innerHTML='';
+  const el=$('communityCardsEl');
   const allC=[...S.communityCards.flop,...S.communityCards.turn,...S.communityCards.river];
-  allC.forEach(c=>{
-    const d=document.createElement('div');
-    if(c&&c.rank&&c.suit){
-      d.className='mini-card'+(isRed(c.suit)?' red':'');
-      d.innerHTML=`${c.rank}<span>${c.suit}</span>`;
-    } else d.className='mini-card back';
-    el.appendChild(d);
-  });
+  el.innerHTML=allC.map(c=>miniCardHTML(c)).join('');
 }
 
 function renderActionLog() {
@@ -1046,10 +1072,10 @@ function renderShowdown() {
   const list=$('showdownList'); list.innerHTML='';
   const hero=Object.values(S.players).find(p=>p.role==='hero' && !p.folded);
   if(hero){
-    // Hero cards are always known — show them read-only
-    const hc=S.heroCards.map(c=>c?`<span class="mini-card${isRed(c.suit)?' red':''}" style="width:26px;height:36px;font-size:11px">${c.rank}<span>${c.suit}</span></span>`:'').join('');
+    // Hero cards are always known — show them read-only as full card faces
+    const hc=S.heroCards.map(c=>c&&c.rank?`<div style="width:44px;height:62px;font-size:11px;position:relative">${cardFace(c.rank,c.suit)}</div>`:'').join('');
     const d=document.createElement('div'); d.className='panel';
-    d.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div class="vbadge" style="background:rgba(74,144,232,.15);border-color:var(--hero-c);color:var(--hero-c)">🫵</div><div class="vinfo"><div class="vname" style="color:var(--hero-c)">Hero</div><div class="vpos">${pos(hero.seatIdx)} · always shown</div></div><div style="display:flex;gap:4px;margin-left:auto">${hc}</div></div>`;
+    d.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div class="vbadge" style="background:rgba(74,144,232,.15);border-color:var(--hero-c);color:var(--hero-c)">🫵</div><div class="vinfo"><div class="vname" style="color:var(--hero-c)">Hero</div><div class="vpos">${pos(hero.seatIdx)} · always shown</div></div><div style="display:flex;gap:6px;margin-left:auto">${hc}</div></div>`;
     list.appendChild(d);
   }
   const villains=Object.values(S.players).filter(p=>!p.folded && p.role==='villain');
@@ -1100,8 +1126,8 @@ function renderShowdownSlots(p) {
     slot.className='card-slot'+(filled?' filled':'')+(red?' red':'')+(focused?' focused':'');
     slot.onclick=()=>openShowdownPicker(p, i);
     slot.innerHTML=filled
-      ? `<span class="cr">${card.rank}</span><span class="cs">${card.suit}</span>`
-      : `<span style="font-size:20px;color:#444">?</span><span class="empty-hint">Card ${i+1}</span>`;
+      ? cardFace(card.rank, card.suit)
+      : `<span class="empty-q">?</span><span class="empty-hint">Card ${i+1}</span>`;
     el.appendChild(slot);
   });
 }
@@ -1182,10 +1208,10 @@ function showSummary() {
     const d=document.createElement('div'); d.className='ss-item';
     d.style.borderLeftColor='var(--villain-c)';
     const rows=shown.map(p=>{
-      const cards=p.shownCards.map(c=>c.rank+c.suit).join(' ');
-      return `${p.name} (${pos(p.seatIdx)}): <b>${cards}</b>`;
-    }).join('<br>');
-    d.innerHTML=`<h4>Showdown — cards revealed</h4><p>${rows}</p>`;
+      const faces=p.shownCards.map(c=>`<div style="width:34px;height:48px;font-size:8px;position:relative">${cardFace(c.rank,c.suit)}</div>`).join('');
+      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:12px;font-weight:700;min-width:64px">${p.name} (${pos(p.seatIdx)})</span><div style="display:flex;gap:5px">${faces}</div></div>`;
+    }).join('');
+    d.innerHTML=`<h4>Showdown — cards revealed</h4>${rows}`;
     ssl.appendChild(d);
   }
 
