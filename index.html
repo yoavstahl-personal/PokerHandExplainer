@@ -690,10 +690,14 @@ function initStreet() {
   S.ss={ contributions:{}, currentBet:0, queue:[] };
 
   if(isPreflop) {
-    // Post blinds — find SB and BB by seat index
+    // Post blinds by ACTUAL position: seat 0 = SB, seat 1 = BB (positions are
+    // fixed by seat index). If those exact seats aren't occupied, fall back to
+    // the two earliest-acting blind seats among occupied players so a heads-up
+    // or short table still posts blinds correctly.
     const occupied=Object.keys(S.players).map(Number).sort((a,b)=>a-b);
-    // SB = occupied[0] (lowest seat index), BB = occupied[1]
-    const sbSi=occupied[0], bbSi=occupied.length>1?occupied[1]:-1;
+    let sbSi = S.players[0]!=null ? 0 : occupied[0];
+    let bbSi = S.players[1]!=null ? 1 : occupied.find(si=>si!==sbSi);
+    if(bbSi==null) bbSi=-1;
     if(sbSi!=null && S.players[sbSi]) {
       const sb=S.players[sbSi];
       const sbPost=Math.min(0.5, sb.stack);
