@@ -364,13 +364,28 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
   </div>
 </div>
 
+<!-- ══ S4b: SHOWDOWN ═════════════════════════════════════ -->
+<div class="screen" id="s-showdown">
+  <div class="s-title">Showdown</div>
+  <div class="s-sub">For each villain still in the hand, did they show their cards? If so, tap a card slot and pick from the deck.</div>
+  <div id="showdownList" style="width:100%;display:flex;flex-direction:column;gap:10px"></div>
+  <div class="panel" id="showdownDeckPanel" style="display:none">
+    <div class="panel-title" id="showdownDeckTitle">Pick the focused card</div>
+    <div class="card-deck" id="showdownDeck"></div>
+  </div>
+  <div class="bottom-nav">
+    <button class="btn btn-secondary btn-sm" onclick="goToScreen('s-street')" style="flex:0 0 auto;width:auto">← Back</button>
+    <button class="btn btn-primary" onclick="goToResultScreen()">Next: Who Won? →</button>
+  </div>
+</div>
+
 <!-- ══ S5: RESULT ════════════════════════════════════════ -->
 <div class="screen" id="s-result">
   <div class="s-title">Who Won?</div>
   <div class="s-sub">Select the winner of this hand.</div>
   <div class="winner-list" id="winnerList"></div>
   <div class="bottom-nav">
-    <button class="btn btn-secondary btn-sm" onclick="goToScreen('s-street')" style="flex:0 0 auto;width:auto">← Back</button>
+    <button class="btn btn-secondary btn-sm" onclick="goToScreen(S.endedByFold ? 's-street' : 's-showdown')" style="flex:0 0 auto;width:auto">← Back</button>
     <button class="btn btn-primary" id="resultNextBtn" onclick="showSummary()" disabled>See Summary →</button>
   </div>
 </div>
@@ -449,6 +464,8 @@ const S = {
   // Street state
   ss: { contributions:{}, currentBet:0, queue:[] },
   winner: null,
+  endedByFold: false,
+  potByStreet: {}, // streetKey → pot size at end of that street's betting
   // Card picker state
   picker: null,   // { slots:[{rank,suit}], focusIdx, containerId, deckId, onChange }
 };
@@ -467,11 +484,14 @@ function isRed(sym) { return sym==='♥'||sym==='♦'; }
 function cardKey(c) { return c&&c.rank&&c.suit ? c.rank+c.suit : null; }
 function usedCards() {
   const used = new Set();
-  [S.heroCards[0], S.heroCards[1],
-   ...(S.communityCards.flop), ...(S.communityCards.turn), ...(S.communityCards.river)
-  ].forEach(c => { const k=cardKey(c); if(k) used.add(k); });
+  const all = [S.heroCards[0], S.heroCards[1],
+   ...(S.communityCards.flop), ...(S.communityCards.turn), ...(S.communityCards.river)];
+  // Include any villain cards revealed at showdown
+  Object.values(S.players).forEach(p=>{ if(p.shownCards) all.push(p.shownCards[0], p.shownCards[1]); });
+  all.forEach(c => { const k=cardKey(c); if(k) used.add(k); });
   return used;
 }
+function snapshotPot() { S.potByStreet[sk()] = S.pot; }
 
 function $(id) { return document.getElementById(id); }
 function toast(msg) {
@@ -482,7 +502,7 @@ function toast(msg) {
 // ═══════════════════════════════════════════════
 // ROUTING
 // ═══════════════════════════════════════════════
-const SCREENS = ['s-setup','s-stacks','s-cards','s-street','s-result','s-summary'];
+const SCREENS = ['s-setup','s-stacks','s-cards','s-street','s-showdown','s-result','s-summary'];
 function goToScreen(id) {
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   $(id).classList.add('active');
@@ -674,6 +694,8 @@ function startHand() {
   S.logs={ preflop:[], flop:[], turn:[], river:[] };
   S.communityCards={ flop:[null,null,null], turn:[null], river:[null] };
   S.winner=null;
+  S.endedByFold=false;
+  S.potByStreet={};
   initStreet();
 }
 
@@ -727,10 +749,9 @@ function initStreet() {
       const p=S.players[si];
       return p&&!p.folded&&!p.allin;
     });
-    // If only 0 or 1 active player, skip to next
+    // If 0 or 1 players still able to act (rest all-in), no more betting — showdown
     if(S.ss.queue.length<=1) {
-      // All remaining go to showdown
-      goToResultScreen(); return;
+      snapshotPot(); goToShowdown(); return;
     }
   }
 
@@ -817,7 +838,7 @@ function renderActionPicker() {
   if(notFolded.length===1){
     const winner=notFolded[0];
     toast(`${winner.name} wins — everyone else folded`);
-    S.winner=winner;
+    S.winner=winner; S.endedByFold=true; snapshotPot();
     goToResultScreen(); return;
   }
 
@@ -925,7 +946,8 @@ function commitAction(key, amount) {
     // Check if only 1 left
     const nf=Object.values(S.players).filter(x=>!x.folded);
     if(nf.length===1){
-      S.winner=nf[0]; toast(`${nf[0].name} wins — everyone else folded`);
+      S.winner=nf[0]; S.endedByFold=true; snapshotPot();
+      toast(`${nf[0].name} wins — everyone else folded`);
       goToResultScreen(); return;
     }
     // Remove this player from queue in case they appear again (shouldn't but safety)
@@ -986,7 +1008,8 @@ function rebuildQueueAfter(raisingSi) {
 function advanceQueue() { renderActionPicker(); }
 
 function streetNext() {
-  if(S.streetIdx===3){ goToResultScreen(); return; }
+  snapshotPot();
+  if(S.streetIdx===3){ goToShowdown(); return; }
   S.streetIdx++;
   S.ss={ contributions:{}, currentBet:0, queue:[] };
   initStreet();
@@ -1001,6 +1024,98 @@ function streetBack() {
   S.ss={ contributions:{}, currentBet:0, queue:[] };
   // Re-init players' folded status is tricky to undo; just reload screen
   initStreet();
+}
+
+// ═══════════════════════════════════════════════
+// SHOWDOWN — ask each villain if they reveal cards
+// ═══════════════════════════════════════════════
+function goToShowdown() {
+  S.picker=null;
+  // Won by fold → no showdown, straight to result
+  if(S.endedByFold){ goToResultScreen(); return; }
+  const villains=Object.values(S.players).filter(p=>!p.folded && p.role==='villain');
+  if(villains.length===0){ goToResultScreen(); return; }
+  // Init reveal state lazily
+  villains.forEach(p=>{ if(p.shows===undefined){ p.shows=false; p.shownCards=[{rank:null,suit:null},{rank:null,suit:null}]; } });
+  $('showdownDeckPanel').style.display='none';
+  renderShowdown();
+  goToScreen('s-showdown');
+}
+
+function renderShowdown() {
+  const list=$('showdownList'); list.innerHTML='';
+  const hero=Object.values(S.players).find(p=>p.role==='hero' && !p.folded);
+  if(hero){
+    // Hero cards are always known — show them read-only
+    const hc=S.heroCards.map(c=>c?`<span class="mini-card${isRed(c.suit)?' red':''}" style="width:26px;height:36px;font-size:11px">${c.rank}<span>${c.suit}</span></span>`:'').join('');
+    const d=document.createElement('div'); d.className='panel';
+    d.innerHTML=`<div style="display:flex;align-items:center;gap:10px"><div class="vbadge" style="background:rgba(74,144,232,.15);border-color:var(--hero-c);color:var(--hero-c)">🫵</div><div class="vinfo"><div class="vname" style="color:var(--hero-c)">Hero</div><div class="vpos">${pos(hero.seatIdx)} · always shown</div></div><div style="display:flex;gap:4px;margin-left:auto">${hc}</div></div>`;
+    list.appendChild(d);
+  }
+  const villains=Object.values(S.players).filter(p=>!p.folded && p.role==='villain');
+  villains.forEach(p=>{
+    const d=document.createElement('div'); d.className='panel';
+    const head=document.createElement('div');
+    head.style.cssText='display:flex;align-items:center;gap:10px';
+    head.innerHTML=`<div class="vbadge">😈</div><div class="vinfo"><div class="vname">${p.name}</div><div class="vpos">${pos(p.seatIdx)}</div></div>`;
+    const toggle=document.createElement('div');
+    toggle.style.cssText='display:flex;gap:6px;margin-left:auto';
+    const showBtn=document.createElement('button');
+    showBtn.className='qbtn'; showBtn.textContent='Shows';
+    showBtn.style.cssText='padding:8px 14px;font-size:12px'+(p.shows?';background:var(--accent);color:#000':'');
+    showBtn.onclick=()=>{ p.shows=true; renderShowdown(); };
+    const muckBtn=document.createElement('button');
+    muckBtn.className='qbtn'; muckBtn.textContent='Mucks';
+    muckBtn.style.cssText='padding:8px 14px;font-size:12px'+(!p.shows?';background:#444;color:#fff':'');
+    muckBtn.onclick=()=>{ p.shows=false; p.shownCards=[{rank:null,suit:null},{rank:null,suit:null}]; if(S.picker&&S.picker.owner===p.seatIdx){S.picker=null;$('showdownDeckPanel').style.display='none';} renderShowdown(); };
+    toggle.appendChild(showBtn); toggle.appendChild(muckBtn);
+    head.appendChild(toggle);
+    d.appendChild(head);
+    if(p.shows){
+      const slotsId=`sd-slots-${p.seatIdx}`;
+      const slotsRow=document.createElement('div');
+      slotsRow.className='card-slots-row'; slotsRow.id=slotsId;
+      slotsRow.style.marginTop='10px';
+      d.appendChild(slotsRow);
+    }
+    list.appendChild(d);
+  });
+  // Render slots for whichever villain is currently shows=true, and wire the deck
+  villains.filter(p=>p.shows).forEach(p=>{
+    renderShowdownSlots(p);
+  });
+  // Re-render active picker slots if any
+  if(S.picker) renderSlots();
+}
+
+function renderShowdownSlots(p) {
+  const slotsId=`sd-slots-${p.seatIdx}`;
+  const el=$(slotsId); if(!el) return;
+  el.innerHTML='';
+  p.shownCards.forEach((card,i)=>{
+    const slot=document.createElement('div');
+    const filled=card&&card.rank&&card.suit;
+    const red=filled&&isRed(card.suit);
+    const focused=S.picker&&S.picker.owner===p.seatIdx&&S.picker.focusIdx===i;
+    slot.className='card-slot'+(filled?' filled':'')+(red?' red':'')+(focused?' focused':'');
+    slot.onclick=()=>openShowdownPicker(p, i);
+    slot.innerHTML=filled
+      ? `<span class="cr">${card.rank}</span><span class="cs">${card.suit}</span>`
+      : `<span style="font-size:20px;color:#444">?</span><span class="empty-hint">Card ${i+1}</span>`;
+    el.appendChild(slot);
+  });
+}
+
+function openShowdownPicker(p, cardIdx) {
+  $('showdownDeckTitle').textContent=`Pick ${p.name}'s card`;
+  $('showdownDeckPanel').style.display='block';
+  S.picker={
+    slots:p.shownCards, focusIdx:cardIdx, owner:p.seatIdx,
+    slotsId:`sd-slots-${p.seatIdx}`, deckId:'showdownDeck',
+    onChange:()=>{ renderShowdownSlots(p); },
+  };
+  renderSlots();
+  renderDeck();
 }
 
 // ═══════════════════════════════════════════════
@@ -1050,11 +1165,29 @@ function showSummary() {
     const log=S.logs[s]||[];
     if(!log.length) return;
     const cc=ccStr(s);
+    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} posts ${fmtBB(a.amount)}`).join(', ');
     const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
+    const potEnd=S.potByStreet[s];
     const d=document.createElement('div'); d.className=`ss-item ${s}`;
-    d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4><p>${acts||'—'}</p>`;
+    d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4>`
+      +(blinds?`<p style="color:#888">${blinds}</p>`:'')
+      +`<p>${acts||'—'}</p>`
+      +(potEnd!=null?`<p style="color:var(--accent);font-weight:700">Pot after ${['preflop','flop','turn','river'][i]}: ${fmtBB(potEnd)} ($${(potEnd*S.bbSize).toFixed(2)})</p>`:'');
     ssl.appendChild(d);
   });
+
+  // Showdown reveal (if any villain showed)
+  const shown=Object.values(S.players).filter(p=>p.shows && p.shownCards && p.shownCards.every(c=>c&&c.rank&&c.suit));
+  if(shown.length){
+    const d=document.createElement('div'); d.className='ss-item';
+    d.style.borderLeftColor='var(--villain-c)';
+    const rows=shown.map(p=>{
+      const cards=p.shownCards.map(c=>c.rank+c.suit).join(' ');
+      return `${p.name} (${pos(p.seatIdx)}): <b>${cards}</b>`;
+    }).join('<br>');
+    d.innerHTML=`<h4>Showdown — cards revealed</h4><p>${rows}</p>`;
+    ssl.appendChild(d);
+  }
 
   buildInsights();
   goToScreen('s-summary');
@@ -1087,7 +1220,7 @@ function restartApp() {
     players:{}, pot:0, streetIdx:0,
     logs:{preflop:[],flop:[],turn:[],river:[]},
     ss:{contributions:{},currentBet:0,queue:[]},
-    winner:null, picker:null,
+    winner:null, picker:null, endedByFold:false, potByStreet:{},
   });
   refreshSetup();
   goToScreen('s-setup');
