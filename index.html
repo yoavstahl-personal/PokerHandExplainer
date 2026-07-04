@@ -1655,6 +1655,15 @@ function restartApp() {
 // ═══════════════════════════════════════════════
 refreshSetup();
 renderDots('s-setup');
+
+// Register the service worker so the app is installable on Android and works
+// offline. Registered relative to the page so it works under GitHub Pages'
+// project subpath.
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  });
+}
 </script>
 </body>
 </html>
