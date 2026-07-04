@@ -247,6 +247,13 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .ss-item h4 { font-size: 11px; color: var(--muted); text-transform: uppercase; font-weight: 700; }
 .ss-item p { font-size: 12px; line-height: 1.6; color: #ccc; }
 .insight-box { width: 100%; background: rgba(232,200,74,.07); border: 1px solid rgba(232,200,74,.2); border-radius: var(--radius); padding: 14px; font-size: 13px; line-height: 1.8; color: #ddd; }
+
+/* ── HAND HISTORY (poker-tracker format) ─── */
+.hh-wrap { width: 100%; background: #0c0c0c; border: 1px solid #262626; border-radius: var(--radius); overflow: hidden; }
+.hh-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #1e1e1e; background: #141414; }
+.hh-copy { background: #222; border: 1px solid #3a3a3a; color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.hh-copy:active { background: var(--accent); color: #000; }
+.hh-body { padding: 12px; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 11px; line-height: 1.55; color: #c8cccf; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
 .insight-box strong { color: var(--accent); }
 
 /* ── WINNER ─── */
@@ -417,7 +424,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
   </div>
   <div class="bottom-nav">
     <button class="btn btn-secondary btn-sm" onclick="goToScreen('s-street')" style="flex:0 0 auto;width:auto">← Back</button>
-    <button class="btn btn-primary" onclick="goToResultScreen()">Next: Who Won? →</button>
+    <button class="btn btn-primary" id="showdownNextBtn" onclick="resolveShowdown()">See Result →</button>
   </div>
 </div>
 
@@ -441,6 +448,15 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
   <div class="divider"></div>
   <div class="summary-card" id="summaryInfo"></div>
   <div class="street-summaries" id="streetSummaries"></div>
+
+  <div class="hh-wrap">
+    <div class="hh-head">
+      <span class="panel-title" style="margin:0">Hand history</span>
+      <button class="hh-copy" id="hhCopyBtn" onclick="copyHandHistory()">Copy</button>
+    </div>
+    <pre class="hh-body" id="handHistory"></pre>
+  </div>
+
   <div class="insight-box" id="insightBox"></div>
   <div class="bottom-nav">
     <button class="btn btn-secondary" onclick="restartApp()">🔄 New Hand</button>
@@ -470,6 +486,13 @@ const SUITS = [
   { sym: '♦', label: '♦', red: true  },
   { sym: '♣', label: '♣', red: false },
 ];
+// Rank → numeric value (A high). Used by the hand evaluator.
+const RANKVAL = { '2':2,'3':3,'4':4,'5':5,'6':6,'7':7,'8':8,'9':9,'T':10,'J':11,'Q':12,'K':13,'A':14 };
+// Rank names for hand descriptions (index by value 2..14)
+const RANK_SINGULAR = {2:'Two',3:'Three',4:'Four',5:'Five',6:'Six',7:'Seven',8:'Eight',9:'Nine',10:'Ten',11:'Jack',12:'Queen',13:'King',14:'Ace'};
+const RANK_PLURAL = {2:'Twos',3:'Threes',4:'Fours',5:'Fives',6:'Sixes',7:'Sevens',8:'Eights',9:'Nines',10:'Tens',11:'Jacks',12:'Queens',13:'Kings',14:'Aces'};
+// Suit symbol → letter (poker-tracker notation)
+const SUIT_LETTER = { '♠':'s','♥':'h','♦':'d','♣':'c' };
 
 // Seat positions (left%, top%) relative to 320×210 container
 const SEAT_POS = [
@@ -506,7 +529,11 @@ const S = {
   // Street state
   ss: { contributions:{}, currentBet:0, queue:[] },
   winner: null,
+  winners: [],           // for split pots
   endedByFold: false,
+  autoResolved: false,   // winner determined by evaluating hole cards
+  showdownResults: null, // [{p, cards, score, handName}] when auto-resolved
+  startStacks: {},       // seatIdx → starting stack (snapshot at start of hand)
   potByStreet: {}, // streetKey → pot size at end of that street's betting
   // Card picker state
   picker: null,   // { slots:[{rank,suit}], focusIdx, containerId, deckId, onChange }
@@ -745,12 +772,18 @@ function startHand() {
       folded:false, allin:false,
     };
   });
+  // Snapshot the true starting stacks (initStacks gets mutated during play)
+  S.startStacks={};
+  Object.keys(S.players).forEach(si=>{ S.startStacks[si]=S.players[si].stack; });
   S.pot=0;
   S.streetIdx=0;
   S.logs={ preflop:[], flop:[], turn:[], river:[] };
   S.communityCards={ flop:[null,null,null], turn:[null], river:[null] };
   S.winner=null;
+  S.winners=[];
   S.endedByFold=false;
+  S.autoResolved=false;
+  S.showdownResults=null;
   S.potByStreet={};
   initStreet();
 }
@@ -1143,6 +1176,101 @@ function streetBack() {
 // ═══════════════════════════════════════════════
 // SHOWDOWN — ask each villain if they reveal cards
 // ═══════════════════════════════════════════════
+// HAND EVALUATOR (best 5 of 7, Texas Hold'em)
+// Returns a comparable score array [category, ...tiebreakers].
+// Categories: 8 straight flush · 7 quads · 6 full house · 5 flush ·
+//             4 straight · 3 trips · 2 two pair · 1 pair · 0 high card
+// ═══════════════════════════════════════════════
+function rank5(cards) {
+  const vals = cards.map(c=>RANKVAL[c.rank]).sort((a,b)=>b-a);
+  const suits = cards.map(c=>c.suit);
+  const isFlush = suits.every(s=>s===suits[0]);
+  const uniq = [...new Set(vals)];
+  let straightHigh = 0;
+  if (uniq.length===5) {
+    if (uniq[0]-uniq[4]===4) straightHigh = uniq[0];
+    else if (uniq[0]===14 && uniq[1]===5 && uniq[4]===2) straightHigh = 5; // wheel A-2-3-4-5
+  }
+  const counts = {};
+  vals.forEach(v=>counts[v]=(counts[v]||0)+1);
+  const groups = Object.entries(counts).map(([r,c])=>[c,+r]).sort((a,b)=> b[0]-a[0] || b[1]-a[1]);
+  const pattern = groups.map(g=>g[0]).join('');
+  const k = groups.map(g=>g[1]);
+  if (straightHigh && isFlush) return [8, straightHigh];
+  if (pattern==='41')   return [7, k[0], k[1]];
+  if (pattern==='32')   return [6, k[0], k[1]];
+  if (isFlush)          return [5, ...vals];
+  if (straightHigh)     return [4, straightHigh];
+  if (pattern==='311')  return [3, k[0], k[1], k[2]];
+  if (pattern==='221')  return [2, k[0], k[1], k[2]];
+  if (pattern==='2111') return [1, k[0], k[1], k[2], k[3]];
+  return [0, ...vals];
+}
+function cmpScore(a, b) {
+  const n = Math.max(a.length, b.length);
+  for (let i=0;i<n;i++){ const d=(a[i]||0)-(b[i]||0); if(d) return d; }
+  return 0;
+}
+function combos5(arr) {
+  const out=[]; const n=arr.length;
+  for(let a=0;a<n-4;a++)for(let b=a+1;b<n-3;b++)for(let c=b+1;c<n-2;c++)for(let d=c+1;d<n-1;d++)for(let e=d+1;e<n;e++)
+    out.push([arr[a],arr[b],arr[c],arr[d],arr[e]]);
+  return out;
+}
+function best7(cards) {
+  let best=null;
+  combos5(cards).forEach(five=>{ const s=rank5(five); if(!best||cmpScore(s,best)>0) best=s; });
+  return best;
+}
+function handName(score) {
+  const cat=score[0], r=v=>RANK_PLURAL[v], s=v=>RANK_SINGULAR[v];
+  switch(cat){
+    case 8: return score[1]===14 ? 'Royal flush' : `Straight flush, ${s(score[1])}-high`;
+    case 7: return `Four of a kind, ${r(score[1])}`;
+    case 6: return `Full house, ${r(score[1])} full of ${r(score[2])}`;
+    case 5: return `Flush, ${s(score[1])}-high`;
+    case 4: return `Straight, ${s(score[1])}-high`;
+    case 3: return `Three of a kind, ${r(score[1])}`;
+    case 2: return `Two pair, ${r(score[1])} and ${r(score[2])}`;
+    case 1: return `Pair of ${r(score[1])}`;
+    default: return `High card ${s(score[1])}`;
+  }
+}
+function knownHoleCards(p) {
+  const cards = p.role==='hero' ? S.heroCards : (p.shows ? p.shownCards : null);
+  if (cards && cards.length===2 && cards.every(c=>c&&c.rank&&c.suit)) return cards;
+  return null;
+}
+function boardCards() {
+  return [...S.communityCards.flop, ...S.communityCards.turn, ...S.communityCards.river]
+    .filter(c=>c&&c.rank&&c.suit);
+}
+
+// Decide the winner: if every remaining player's hole cards are known and the
+// board is complete, evaluate and skip the manual "who won" question.
+function resolveShowdown() {
+  const contenders = Object.values(S.players).filter(p=>!p.folded);
+  const board = boardCards();
+  const evaluated = contenders.map(p=>({ p, cards: knownHoleCards(p) }));
+  const allKnown = board.length===5 && evaluated.every(x=>x.cards);
+
+  if (!allKnown) { goToResultScreen(); return; }  // fall back to asking
+
+  evaluated.forEach(x=>{
+    x.score = best7([...x.cards, ...board]);
+    x.hand = handName(x.score);
+  });
+  let best=null;
+  evaluated.forEach(x=>{ if(!best||cmpScore(x.score,best.score)>0) best=x; });
+  const winners = evaluated.filter(x=>cmpScore(x.score,best.score)===0);
+  S.autoResolved = true;
+  S.showdownResults = evaluated;
+  S.winners = winners.map(w=>w.p);
+  S.winner = winners[0].p;
+  showSummary();
+}
+
+// ═══════════════════════════════════════════════
 function goToShowdown() {
   S.picker=null;
   // Won by fold → no showdown, straight to result
@@ -1237,14 +1365,15 @@ function openShowdownPicker(p, cardIdx) {
 // ═══════════════════════════════════════════════
 function goToResultScreen() {
   S.picker=null;
+  S.autoResolved=false;
   const el=$('winnerList'); el.innerHTML='';
-  S.winner=null; $('resultNextBtn').disabled=true;
+  S.winner=null; S.winners=[]; $('resultNextBtn').disabled=true;
   Object.values(S.players).filter(p=>!p.folded).forEach(p=>{
     const btn=document.createElement('div');
     btn.className=`winner-btn ${p.role}`;
     btn.innerHTML=`<span class="wi">${p.role==='hero'?'🫵':'😈'}</span><div class="winfo"><div class="wname">${p.name}</div><div class="wpos">${pos(p.seatIdx)} · ${fmtBB(p.stack)} behind</div></div>`;
     btn.onclick=()=>{
-      S.winner=p;
+      S.winner=p; S.winners=[p];
       document.querySelectorAll('.winner-btn').forEach(b=>{ b.style.opacity='.4'; b.classList.remove('chosen'); });
       btn.style.opacity='1'; btn.classList.add('chosen');
       btn.style.background=p.role==='hero'?'rgba(74,144,232,.15)':'rgba(232,74,74,.15)';
@@ -1260,9 +1389,25 @@ function goToResultScreen() {
 // ═══════════════════════════════════════════════
 function showSummary() {
   const w=S.winner;
-  $('summaryTrophy').textContent=w?.role==='hero'?'🏆':'💀';
-  $('summaryWinner').textContent=w?`${w.name} wins!`:'Split pot';
-  $('summaryPot').innerHTML=`Pot: <span>${fmtBB(S.pot)}</span> ($${(S.pot*S.bbSize).toFixed(2)})`;
+  const winners=(S.winners&&S.winners.length)?S.winners:(w?[w]:[]);
+  const split=winners.length>1;
+  const heroWon=winners.some(x=>x.role==='hero');
+  $('summaryTrophy').textContent = split ? '🤝' : (heroWon?'🏆':'💀');
+  // Winning hand description (only when auto-resolved from known cards)
+  let winHand='';
+  if(S.autoResolved && S.showdownResults){
+    const wr=S.showdownResults.find(x=>x.p===winners[0]);
+    if(wr) winHand=wr.hand;
+  }
+  if(split){
+    $('summaryWinner').textContent=`Split pot: ${winners.map(x=>x.name).join(' & ')}`;
+  } else {
+    $('summaryWinner').textContent=`${w?w.name:'?'} wins${winHand?` with ${winHand}`:''}`;
+  }
+  const share = winners.length ? S.pot/winners.length : S.pot;
+  $('summaryPot').innerHTML = split
+    ? `Pot: <span>${fmtBB(S.pot)}</span> — ${fmtBB(share)} each`
+    : `Pot: <span>${fmtBB(S.pot)}</span> ($${(S.pot*S.bbSize).toFixed(2)})`;
 
   const hc=S.heroCards.map(c=>c?c.rank+c.suit:'?').join(' ');
   $('summaryInfo').innerHTML=`
@@ -1290,19 +1435,35 @@ function showSummary() {
     ssl.appendChild(d);
   });
 
-  // Showdown reveal (if any villain showed)
-  const shown=Object.values(S.players).filter(p=>p.shows && p.shownCards && p.shownCards.every(c=>c&&c.rank&&c.suit));
-  if(shown.length){
+  // Showdown reveal — prefer the auto-evaluated results (includes hand ranks)
+  let revealRows=null;
+  if(S.autoResolved && S.showdownResults){
+    revealRows=S.showdownResults.map(x=>{
+      const isWin=S.winners.includes(x.p);
+      const faces=x.cards.map(c=>`<div style="width:34px;height:48px;font-size:8px;position:relative">${cardFace(c.rank,c.suit)}</div>`).join('');
+      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px">
+        <span style="font-size:12px;font-weight:700;min-width:56px">${x.p.name}${isWin?' 🏆':''}</span>
+        <div style="display:flex;gap:5px">${faces}</div>
+        <span style="font-size:11px;color:${isWin?'var(--accent)':'var(--muted)'};margin-left:auto;text-align:right">${x.hand}</span>
+      </div>`;
+    }).join('');
+  } else {
+    const shown=Object.values(S.players).filter(p=>p.shows && p.shownCards && p.shownCards.every(c=>c&&c.rank&&c.suit));
+    if(shown.length){
+      revealRows=shown.map(p=>{
+        const faces=p.shownCards.map(c=>`<div style="width:34px;height:48px;font-size:8px;position:relative">${cardFace(c.rank,c.suit)}</div>`).join('');
+        return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:12px;font-weight:700;min-width:64px">${p.name} (${pos(p.seatIdx)})</span><div style="display:flex;gap:5px">${faces}</div></div>`;
+      }).join('');
+    }
+  }
+  if(revealRows){
     const d=document.createElement('div'); d.className='ss-item';
     d.style.borderLeftColor='var(--villain-c)';
-    const rows=shown.map(p=>{
-      const faces=p.shownCards.map(c=>`<div style="width:34px;height:48px;font-size:8px;position:relative">${cardFace(c.rank,c.suit)}</div>`).join('');
-      return `<div style="display:flex;align-items:center;gap:8px;margin-top:6px"><span style="font-size:12px;font-weight:700;min-width:64px">${p.name} (${pos(p.seatIdx)})</span><div style="display:flex;gap:5px">${faces}</div></div>`;
-    }).join('');
-    d.innerHTML=`<h4>Showdown — cards revealed</h4>${rows}`;
+    d.innerHTML=`<h4>Showdown — cards revealed</h4>${revealRows}`;
     ssl.appendChild(d);
   }
 
+  $('handHistory').textContent=buildHandHistory();
   buildInsights();
   goToScreen('s-summary');
 }
@@ -1324,6 +1485,113 @@ function buildInsights() {
 }
 
 // ═══════════════════════════════════════════════
+// HAND HISTORY — PokerStars-style tracker format
+// ═══════════════════════════════════════════════
+function usd(bb){ return '$'+(bb*S.bbSize).toFixed(2); }
+function cn(c){ return c&&c.rank&&c.suit ? c.rank+SUIT_LETTER[c.suit] : ''; }
+function cardsStr(cards){ return cards.filter(c=>c&&c.rank&&c.suit).map(cn).join(' '); }
+function foldStreetOf(name){
+  for(const s of ['preflop','flop','turn','river'])
+    if((S.logs[s]||[]).some(a=>a.player===name && a.action==='fold')) return s;
+  return null;
+}
+// One tracker line per action on a street, reconstructing raise "by" amounts.
+function streetActionLines(streetKey){
+  const out=[];
+  let toMatch = streetKey==='preflop' ? 1 : 0; // preflop the BB (1) is the price
+  (S.logs[streetKey]||[]).forEach(a=>{
+    if(a.action==='post') return;
+    const nm=a.player;
+    switch(a.action){
+      case 'check': out.push(`${nm}: checks`); break;
+      case 'fold':  out.push(`${nm}: folds`); break;
+      case 'call':  out.push(`${nm}: calls ${usd(a.amount)}`); break;
+      case 'bet':   out.push(`${nm}: bets ${usd(a.amount)}`); toMatch=a.amount; break;
+      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: raises ${usd(by)} to ${usd(a.amount)}`); toMatch=a.amount; break; }
+      case 'allin': out.push(`${nm}: bets ${usd(a.amount)} and is all-in`); toMatch=Math.max(toMatch,a.amount); break;
+    }
+  });
+  return out;
+}
+function buildHandHistory(){
+  const L=[];
+  const gameLabel = S.gameType==='nlhe' ? "Hold'em No Limit" : "Omaha Pot Limit";
+  const ts = new Date().toISOString().slice(0,19).replace('T',' ');
+  const order = Object.keys(S.players).map(Number).sort((a,b)=>a-b);
+  const seatNum={}; order.forEach((si,i)=>seatNum[si]=i+1);
+  const btnSi = order.includes(8) ? 8 : order[order.length-1];
+
+  L.push(`Poker Hand Explainer  ${gameLabel} (${usd(0.5)}/${usd(1)}) - ${ts}`);
+  L.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
+  order.forEach(si=>{
+    const p=S.players[si];
+    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) (${usd(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} in chips)`);
+  });
+  (S.logs.preflop||[]).filter(a=>a.action==='post').forEach(a=>{
+    L.push(`${a.player}: posts ${a.amount<=0.5?'small':'big'} blind ${usd(a.amount)}`);
+  });
+
+  L.push('*** HOLE CARDS ***');
+  L.push(`Dealt to Hero [${cardsStr(S.heroCards)}]`);
+  streetActionLines('preflop').forEach(x=>L.push(x));
+
+  const flop=S.communityCards.flop.filter(c=>c&&c.rank&&c.suit);
+  const turn=S.communityCards.turn.filter(c=>c&&c.rank&&c.suit);
+  const river=S.communityCards.river.filter(c=>c&&c.rank&&c.suit);
+  if(flop.length===3){ L.push(`*** FLOP *** [${cardsStr(flop)}]`); streetActionLines('flop').forEach(x=>L.push(x)); }
+  if(turn.length===1){ L.push(`*** TURN *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines('turn').forEach(x=>L.push(x)); }
+  if(river.length===1){ L.push(`*** RIVER *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines('river').forEach(x=>L.push(x)); }
+
+  const winners=(S.winners&&S.winners.length)?S.winners:(S.winner?[S.winner]:[]);
+  const share = winners.length ? S.pot/winners.length : S.pot;
+  const contenders = order.map(si=>S.players[si]).filter(p=>!p.folded);
+  if(!S.endedByFold && contenders.length>1){
+    L.push('*** SHOW DOWN ***');
+    contenders.forEach(p=>{
+      const cards=knownHoleCards(p);
+      if(cards){
+        let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` (${r.hand})`; }
+        L.push(`${p.name}: shows [${cardsStr(cards)}]${hn}`);
+      } else L.push(`${p.name}: mucks hand`);
+    });
+  }
+  winners.forEach(wp=>L.push(`${wp.name} collected ${usd(share)} from pot`));
+
+  L.push('*** SUMMARY ***');
+  L.push(`Total pot ${usd(S.pot)} | Rake ${usd(0)}`);
+  const board=[...flop,...turn,...river];
+  if(board.length) L.push(`Board [${cardsStr(board)}]`);
+  order.forEach(si=>{
+    const p=S.players[si];
+    const cards=knownHoleCards(p);
+    const isWin=winners.includes(p);
+    let tail;
+    if(p.folded){
+      const fs=foldStreetOf(p.name);
+      tail = fs==='preflop' ? 'folded before Flop' : (fs ? 'folded on the '+fs.charAt(0).toUpperCase()+fs.slice(1) : 'folded');
+    } else if(isWin){
+      let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` with ${r.hand}`; }
+      tail = cards ? `showed [${cardsStr(cards)}] and won (${usd(share)})${hn}` : `collected (${usd(share)})`;
+    } else {
+      let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` with ${r.hand}`; }
+      tail = cards ? `showed [${cardsStr(cards)}] and lost${hn}` : 'mucked';
+    }
+    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) ${tail}`);
+  });
+  return L.join('\n');
+}
+function copyHandHistory(){
+  const txt=$('handHistory').textContent;
+  if(navigator.clipboard&&navigator.clipboard.writeText){
+    navigator.clipboard.writeText(txt).then(()=>toast('Hand history copied')).catch(()=>toast('Copy failed'));
+  } else {
+    const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
+    ta.select(); try{ document.execCommand('copy'); toast('Hand history copied'); }catch(e){ toast('Copy failed'); }
+    document.body.removeChild(ta);
+  }
+}
+
+// ═══════════════════════════════════════════════
 // RESTART
 // ═══════════════════════════════════════════════
 function restartApp() {
@@ -1333,8 +1601,9 @@ function restartApp() {
     communityCards:{flop:[null,null,null],turn:[null],river:[null]},
     players:{}, pot:0, streetIdx:0,
     logs:{preflop:[],flop:[],turn:[],river:[]},
-    ss:{contributions:{},currentBet:0,queue:[]},
-    winner:null, picker:null, endedByFold:false, potByStreet:{},
+    ss:{contributions:{},currentBet:0,queue:[],lastRaiseSize:0},
+    winner:null, winners:[], picker:null, endedByFold:false,
+    autoResolved:false, showdownResults:null, startStacks:{}, potByStreet:{},
   });
   refreshSetup();
   goToScreen('s-setup');
