@@ -175,6 +175,23 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .ae-verb.post { color: #888; }
 .ae-amount { margin-left: auto; font-size: 12px; color: var(--accent); font-weight: 700; }
 
+/* ── LIVE STACKS TRACKER ─── */
+.stack-row { display: flex; align-items: center; gap: 8px; font-size: 12px; padding: 4px 6px; border-radius: 7px; background: #131313; }
+.stack-row.acting { background: rgba(232,200,74,.12); box-shadow: inset 0 0 0 1px rgba(232,200,74,.4); }
+.stack-row.folded { opacity: .4; }
+.stack-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.stack-dot.hero { background: var(--hero-c); }
+.stack-dot.villain { background: var(--villain-c); }
+.stack-name { font-weight: 700; min-width: 60px; }
+.stack-pos { color: var(--muted); font-size: 11px; }
+.stack-vals { margin-left: auto; display: flex; gap: 10px; align-items: center; }
+.stack-behind { color: var(--text); font-weight: 700; }
+.stack-in { color: var(--accent); font-weight: 700; }
+.stack-tocall { color: #f88; font-weight: 700; }
+.stack-tag { font-size: 9px; font-weight: 800; padding: 1px 6px; border-radius: 10px; text-transform: uppercase; letter-spacing: .3px; }
+.stack-tag.folded { background: #333; color: #999; }
+.stack-tag.allin { background: rgba(244,68,68,.2); color: #f66; }
+
 /* ── ACTION PICKER ─── */
 .who-card {
   width: 100%; border-radius: var(--radius); padding: 14px 16px;
@@ -341,6 +358,12 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
       <div class="community-cards" id="communityCardsEl"></div>
       <div class="pot-badge" id="potBadge" style="display:none"></div>
     </div>
+  </div>
+
+  <!-- Live stacks tracker -->
+  <div class="panel" id="stacksPanel" style="padding:10px 12px;gap:8px">
+    <div class="panel-title">Stacks &amp; chips in this street</div>
+    <div id="stacksList" style="display:flex;flex-direction:column;gap:6px"></div>
   </div>
 
   <!-- Community card input (postflop only) -->
@@ -742,42 +765,44 @@ function activePlayers() {
 
 function initStreet() {
   const isPreflop=S.streetIdx===0;
-  S.ss={ contributions:{}, currentBet:0, queue:[] };
+  // lastRaiseSize = the size of the last bet/raise increment; sets the minimum
+  // legal raise. Preflop it starts at 1BB (the big blind).
+  S.ss={ contributions:{}, currentBet:0, queue:[], lastRaiseSize:0 };
 
   if(isPreflop) {
-    // Post blinds by ACTUAL position: seat 0 = SB, seat 1 = BB (positions are
-    // fixed by seat index). If those exact seats aren't occupied, fall back to
-    // the two earliest-acting blind seats among occupied players so a heads-up
-    // or short table still posts blinds correctly.
-    const occupied=Object.keys(S.players).map(Number).sort((a,b)=>a-b);
-    let sbSi = S.players[0]!=null ? 0 : occupied[0];
-    let bbSi = S.players[1]!=null ? 1 : occupied.find(si=>si!==sbSi);
-    if(bbSi==null) bbSi=-1;
-    if(sbSi!=null && S.players[sbSi]) {
-      const sb=S.players[sbSi];
-      const sbPost=Math.min(0.5, sb.stack);
-      sb.stack-=sbPost;
-      S.ss.contributions[sbSi]=sbPost;
-      S.pot+=sbPost;
-      S.logs.preflop.push({player:sb.name, action:'post', amount:sbPost});
-    }
-    if(bbSi>=0 && S.players[bbSi]) {
-      const bb=S.players[bbSi];
-      const bbPost=Math.min(1, bb.stack);
-      bb.stack-=bbPost;
-      S.ss.contributions[bbSi]=bbPost;
-      S.pot+=bbPost;
-      S.ss.currentBet=bbPost;
-      S.logs.preflop.push({player:bb.name, action:'post', amount:bbPost});
-    }
-    // Build preflop queue: all active players in PREFLOP_ORDER
+    // Blinds are posted STRICTLY by position: seat 0 = SB (0.5BB), seat 1 = BB
+    // (1BB). Positions are fixed by seat index, so we never reassign blinds to
+    // another seat. If a blind seat is empty, it's posted as a "dead" blind:
+    // the chips go into the pot and set the price, but no player owns them —
+    // so a real player (e.g. UTG) is never wrongly credited with a blind.
+    const postBlind=(seatIdx, amount, name)=>{
+      const p=S.players[seatIdx];
+      if(p){
+        const posted=Math.min(amount, p.stack);
+        p.stack-=posted;
+        S.ss.contributions[seatIdx]=posted;
+        S.pot+=posted;
+        S.logs.preflop.push({player:p.name, action:'post', amount:posted});
+        return posted;
+      }
+      // Dead blind — money in pot, no owner
+      S.pot+=amount;
+      S.logs.preflop.push({player:name+' (dead)', action:'post', amount});
+      return amount;
+    };
+    postBlind(0, 0.5, 'SB');
+    const bbPosted=postBlind(1, 1, 'BB');
+    S.ss.currentBet=1;           // the big blind is the price to call
+    S.ss.lastRaiseSize=1;        // min legal raise increment = 1BB preflop
+    // Preflop action order: UTG first … BB last (with option)
     S.ss.queue=PREFLOP_ORDER.filter(si=>{
       const p=S.players[si];
       return p&&!p.folded&&!p.allin;
     });
   } else {
-    // Postflop: all active (not folded, not allin) in POSTFLOP_ORDER, currentBet=0
+    // Postflop: no bet yet, action starts at SB (first active left of button)
     S.ss.currentBet=0;
+    S.ss.lastRaiseSize=0;
     S.ss.queue=POSTFLOP_ORDER.filter(si=>{
       const p=S.players[si];
       return p&&!p.folded&&!p.allin;
@@ -838,6 +863,37 @@ function updatePotBadge() {
   else el.style.display='none';
 }
 
+// Live tracker: every player's remaining stack, chips committed this street,
+// and (for the player to act) how much they must call.
+function renderStacks() {
+  const el=$('stacksList'); if(!el) return;
+  el.innerHTML='';
+  const acting=S.ss.queue[0];
+  Object.keys(S.players).map(Number).sort((a,b)=>a-b).forEach(si=>{
+    const p=S.players[si];
+    const inStreet=S.ss.contributions[si]||0;
+    const toCall=Math.max(0,(S.ss.currentBet||0)-inStreet);
+    const row=document.createElement('div');
+    row.className='stack-row'+(si===acting?' acting':'')+(p.folded?' folded':'');
+    let tag='';
+    if(p.folded) tag='<span class="stack-tag folded">Folded</span>';
+    else if(p.allin) tag='<span class="stack-tag allin">All-in</span>';
+    const callPart=(si===acting && toCall>0 && !p.folded && !p.allin)
+      ? `<span class="stack-tocall">owes ${fmtBB(toCall)}</span>` : '';
+    row.innerHTML=`
+      <span class="stack-dot ${p.role}"></span>
+      <span class="stack-name">${p.name}</span>
+      <span class="stack-pos">${pos(si)}</span>
+      <span class="stack-vals">
+        ${callPart}
+        ${inStreet>0?`<span class="stack-in">in ${fmtBB(inStreet)}</span>`:''}
+        <span class="stack-behind">${fmtBB(p.stack)} behind</span>
+        ${tag}
+      </span>`;
+    el.appendChild(row);
+  });
+}
+
 function updateCommunityOnTable() {
   const el=$('communityCardsEl');
   const allC=[...S.communityCards.flop,...S.communityCards.turn,...S.communityCards.river];
@@ -858,6 +914,7 @@ function renderActionLog() {
 function renderActionPicker() {
   const pickerWrap=$('actionPickerWrap');
   const queue=S.ss.queue;
+  renderStacks();
 
   // Check: only 1 non-folded player left → auto-win
   const notFolded=Object.values(S.players).filter(p=>!p.folded);
@@ -872,6 +929,7 @@ function renderActionPicker() {
     pickerWrap.style.display='none';
     $('streetNextBtn').style.display='block';
     $('streetDoneBanner').style.display='block';
+    renderStacks();
     return;
   }
 
@@ -887,22 +945,29 @@ function renderActionPicker() {
   const toCall=Math.max(0,(S.ss.currentBet||-0)-(S.ss.contributions[p.seatIdx]||0));
   $('whoMeta').innerHTML=`<span>Pos: ${pos(p.seatIdx)}</span><span>Stack: ${fmtBB(p.stack)}</span><span>To call: ${fmtBB(toCall)}</span><span>Pot: ${fmtBB(S.pot)}</span>`;
 
-  // Action buttons
+  // Action buttons — options follow standard poker rules:
+  //  • Facing a bet (toCall > 0): Call, Raise, Fold.
+  //  • No bet to you (toCall === 0): Check, and Bet (or Raise if a bet already
+  //    exists that you've matched, e.g. the BB's option). Folding for free is
+  //    never offered.
+  //  • All-In is always available as long as you have chips.
   const grid=$('actionGrid'); grid.innerHTML='';
   $('amountSection').style.display='none';
-  const callAmt=Math.min(toCall, p.stack);
-  const canCheck=S.ss.currentBet===0||(S.ss.contributions[p.seatIdx]||0)>=S.ss.currentBet;
-  const canCall=toCall>0&&p.stack>0;
-  const canBet=S.ss.currentBet===0&&p.stack>0;
-  const canRaise=S.ss.currentBet>0&&p.stack>toCall;
+  const facingBet = toCall > 0;
+  const callAmt = Math.min(toCall, p.stack);
+  const canRaise = p.stack > toCall;           // enough behind to put in more
+  const isReopenedBet = S.ss.currentBet > 0;   // a wager already exists this street
 
   const btns=[];
-  btns.push({key:'fold',label:'Fold',cls:'fold-btn'});
-  if(canCheck) btns.push({key:'check',label:'Check',cls:'check-btn'});
-  if(canCall) btns.push({key:'call',label:`Call\n${fmtBB(callAmt)}`,cls:'call-btn'});
-  if(canBet) btns.push({key:'bet',label:'Bet…',cls:'bet-btn'});
-  if(canRaise) btns.push({key:'raise',label:'Raise…',cls:'raise-btn'});
-  btns.push({key:'allin',label:`All-In\n${fmtBB(p.stack)}`,cls:'allin-btn'});
+  if(facingBet){
+    if(callAmt>0) btns.push({key:'call',label:`Call\n${fmtBB(callAmt)}`,cls:'call-btn'});
+    if(canRaise) btns.push({key:'raise',label:'Raise to…',cls:'raise-btn'});
+    btns.push({key:'fold',label:'Fold',cls:'fold-btn'});
+  } else {
+    btns.push({key:'check',label:'Check',cls:'check-btn'});
+    if(canRaise) btns.push({key: isReopenedBet?'raise':'bet', label: isReopenedBet?'Raise to…':'Bet…', cls: isReopenedBet?'raise-btn':'bet-btn'});
+  }
+  if(p.stack>0) btns.push({key:'allin',label:`All-In\n${fmtBB(p.stack)}`,cls:'allin-btn'});
 
   btns.forEach(b=>{
     const el=document.createElement('div');
@@ -932,31 +997,47 @@ function selectAction(key, el) {
   }
 }
 
+// Smallest legal "raise to" (or bet) total for the acting player this street.
+function minLegalTo() {
+  const cb=S.ss.currentBet, incr=S.ss.lastRaiseSize||1;
+  return cb>0 ? +(cb+incr).toFixed(2) : 1; // min re-raise, or min open bet (1BB)
+}
 function buildQuickBets() {
   const qr=$('quickRow'); qr.innerHTML='';
   const p=S.players[S.ss.queue[0]]; if(!p) return;
-  const pot=S.pot, cb=S.ss.currentBet, contrib=S.ss.contributions[p.seatIdx]||0;
-  const minRaise=cb>0?(cb*2-contrib):(cb===0?1:cb);
+  const pot=S.pot, contrib=S.ss.contributions[p.seatIdx]||0;
+  const maxTo=p.stack+contrib;                 // going all-in = whole stack in
+  const minTo=Math.min(minLegalTo(), maxTo);
+  // Quick presets expressed as a TOTAL "raise to" amount
   const presets=[
-    {l:'Min',v:minRaise},
-    {l:'½ pot',v:+(pot/2).toFixed(1)},
-    {l:'2/3 pot',v:+(pot*2/3).toFixed(1)},
-    {l:'Pot',v:+pot.toFixed(1)},
-    {l:'2× pot',v:+(pot*2).toFixed(1)},
+    {l:'Min',v:minTo},
+    {l:'½ pot',v:+(S.ss.currentBet+pot/2).toFixed(1)},
+    {l:'2/3 pot',v:+(S.ss.currentBet+pot*2/3).toFixed(1)},
+    {l:'Pot',v:+(S.ss.currentBet+pot).toFixed(1)},
   ];
+  const seen=new Set();
   presets.forEach(pr=>{
-    if(pr.v<=0||pr.v>p.stack+contrib) return;
+    if(pr.v<minTo||pr.v>maxTo||seen.has(pr.v)) return;
+    seen.add(pr.v);
     const b=document.createElement('div'); b.className='qbtn';
     b.textContent=`${pr.l} (${fmtBB(pr.v)})`;
     b.onclick=()=>{ $('betAmt').value=pr.v; };
     qr.appendChild(b);
   });
+  $('betAmt').placeholder=`Total to (min ${fmtBB(minTo)})`;
 }
 
 function confirmBetRaise() {
   const key=$('amountSection').dataset.key||'bet';
+  const p=S.players[S.ss.queue[0]]; if(!p) return;
+  const contrib=S.ss.contributions[p.seatIdx]||0;
+  const maxTo=p.stack+contrib;
   const raw=parseFloat($('betAmt').value);
   if(!raw||raw<=0){ toast('Enter an amount'); return; }
+  const minTo=Math.min(minLegalTo(), maxTo);
+  // Must be at least the minimum legal raise — unless it's an all-in for less.
+  if(raw<minTo && raw<maxTo){ toast(`Minimum is ${fmtBB(minTo)} (or go all-in)`); return; }
+  if(raw>maxTo){ toast(`Max is ${fmtBB(maxTo)} (their whole stack)`); return; }
   commitAction(key, raw);
 }
 
@@ -995,13 +1076,15 @@ function commitAction(key, amount) {
     // `amount` is the TOTAL the player puts in this street (raise-to amount)
     const totalBet=Math.min(amount, p.stack+contrib);
     const paid=totalBet-contrib;
+    const increment=totalBet-S.ss.currentBet;   // how much this raises the price
     p.stack-=paid;
     S.ss.contributions[si]=totalBet;
     S.pot+=paid;
+    if(increment>=S.ss.lastRaiseSize) S.ss.lastRaiseSize=increment; // full raise
     S.ss.currentBet=totalBet;
     if(p.stack===0) p.allin=true;
     log.push({player:p.name, action:key, amount:totalBet});
-    // Rebuild queue: all active players after si in position order who haven't matched
+    // Everyone still live who hasn't matched the new price must act again
     rebuildQueueAfter(si);
   }
   else if(key==='allin'){
@@ -1010,7 +1093,12 @@ function commitAction(key, amount) {
     p.stack=0; p.allin=true;
     S.ss.contributions[si]=totalNow;
     S.pot+=paid;
-    if(totalNow>S.ss.currentBet){ S.ss.currentBet=totalNow; rebuildQueueAfter(si); }
+    if(totalNow>S.ss.currentBet){
+      const increment=totalNow-S.ss.currentBet;
+      if(increment>=S.ss.lastRaiseSize) S.ss.lastRaiseSize=increment;
+      S.ss.currentBet=totalNow;
+      rebuildQueueAfter(si);
+    }
     log.push({player:p.name, action:'allin', amount:paid});
   }
 
