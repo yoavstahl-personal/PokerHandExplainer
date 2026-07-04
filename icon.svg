@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="112" fill="#0d0d0d"/>
+  <rect x="24" y="24" width="464" height="464" rx="90" fill="none" stroke="#1a6b3c" stroke-width="10"/>
+  <path d="M256 108c-46 58-108 96-108 154 0 40 30 66 66 66 16 0 30-6 42-16-6 30-18 52-38 66h76c-20-14-32-36-38-66 12 10 26 16 42 16 36 0 66-26 66-66 0-58-62-96-108-154z" fill="#e8c84a"/>
+  <text x="256" y="470" font-family="Georgia, serif" font-size="70" font-weight="bold" fill="#e8c84a" text-anchor="middle">BB</text>
+</svg>
