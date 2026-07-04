@@ -93,7 +93,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 /* ── STACKS ─── */
 .hero-row { display: flex; align-items: center; gap: 12px; padding: 12px 14px; background: rgba(74,144,232,.08); border: 1px solid rgba(74,144,232,.25); border-radius: var(--radius); width: 100%; }
 .hero-row .label { flex: 1; font-size: 14px; font-weight: 700; color: var(--hero-c); }
-.hero-row input { width: 90px; padding: 8px 10px; border-radius: 8px; background: #111; border: 1px solid rgba(74,144,232,.4); color: var(--accent); font-size: 15px; font-weight: 700; text-align: right; outline: none; }
+.hero-row input { width: 92px; padding: 9px 10px; border-radius: 8px; background: #111; border: 1px solid rgba(74,144,232,.4); color: var(--accent); font-size: 16px; font-weight: 700; text-align: right; outline: none; }
 .pos-tag { background: #252525; border-radius: 5px; padding: 1px 6px; font-size: 10px; color: var(--muted); font-weight: 700; margin-left: 6px; }
 .villain-list { width: 100%; display: flex; flex-direction: column; gap: 8px; }
 .villain-item { display: flex; align-items: center; gap: 10px; background: #161616; border: 1px solid #262626; border-radius: var(--radius); padding: 11px 13px; }
@@ -101,7 +101,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .vinfo { flex: 1; min-width: 0; }
 .vname { font-size: 13px; font-weight: 700; }
 .vpos { font-size: 11px; color: var(--muted); }
-.villain-item input { width: 76px; padding: 8px 10px; border-radius: 8px; background: #111; border: 1px solid #333; color: var(--accent); font-size: 14px; font-weight: 700; text-align: right; outline: none; flex-shrink: 0; }
+.villain-item input { width: 84px; padding: 9px 10px; border-radius: 8px; background: #111; border: 1px solid #333; color: var(--accent); font-size: 16px; font-weight: 700; text-align: right; outline: none; flex-shrink: 0; }
 .villain-item input:focus { border-color: var(--accent); }
 
 /* ── REUSABLE PLAYING CARD ─── */
@@ -134,14 +134,14 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 .card-slot .empty-hint { font-size: 10px; color: var(--muted); margin-top: 3px; }
 
 /* ── CARD DECK GRID ─── */
-.card-deck { width: 100%; display: flex; flex-direction: column; gap: 4px; }
-.deck-row { display: flex; gap: 3px; align-items: stretch; }
-.deck-suit-label { width: 24px; display: flex; align-items: center; justify-content: center; font-size: 19px; flex-shrink: 0; line-height: 1; }
+.card-deck { width: 100%; display: flex; flex-direction: column; gap: 3px; }
+.deck-row { display: flex; gap: 2px; align-items: stretch; }
+.deck-suit-label { width: 20px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; line-height: 1; }
 .deck-suit-label.red { color: var(--card-red); }
 .deck-suit-label.black { color: #e8e8ee; }
-.deck-suit-cards { display: grid; grid-template-columns: repeat(13, 1fr); gap: 3px; flex: 1; }
+.deck-suit-cards { display: grid; grid-template-columns: repeat(13, minmax(0, 1fr)); gap: 2px; flex: 1; }
 .card-cell {
-  position: relative; aspect-ratio: 7/10; min-height: 44px; border-radius: 5px;
+  position: relative; aspect-ratio: 7/10; border-radius: 5px;
   background: linear-gradient(157deg,#ffffff,#eaecf3);
   border: 1px solid #c4c8d2; box-shadow: 0 1px 2px rgba(0,0,0,.4);
   cursor: pointer; color: var(--card-black);
@@ -251,8 +251,10 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 /* ── HAND HISTORY (poker-tracker format) ─── */
 .hh-wrap { width: 100%; background: #0c0c0c; border: 1px solid #262626; border-radius: var(--radius); overflow: hidden; }
 .hh-head { display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid #1e1e1e; background: #141414; }
-.hh-copy { background: #222; border: 1px solid #3a3a3a; color: var(--text); font-size: 11px; font-weight: 700; padding: 5px 12px; border-radius: 7px; cursor: pointer; }
+.hh-copy { background: #222; border: 1px solid #3a3a3a; color: var(--text); font-size: 11px; font-weight: 700; padding: 6px 12px; border-radius: 7px; cursor: pointer; white-space: nowrap; }
 .hh-copy:active { background: var(--accent); color: #000; }
+.hh-wa { background: #128c7e; border-color: #0e6b60; color: #fff; }
+.hh-wa:active { background: #25d366; color: #000; }
 .hh-body { padding: 12px; font-family: ui-monospace, 'SF Mono', 'Cascadia Code', Consolas, monospace; font-size: 11px; line-height: 1.55; color: #c8cccf; white-space: pre-wrap; word-break: break-word; overflow-x: auto; }
 .insight-box strong { color: var(--accent); }
 
@@ -307,7 +309,6 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 
   <div class="panel">
     <div class="panel-title">Table Settings</div>
-    <div class="field"><label>Big Blind Size ($)</label><input type="number" id="bbSize" value="1" min="0.01" step="0.01"></div>
     <div class="field"><label>Game Type</label>
       <select id="gameType"><option value="nlhe">No-Limit Hold'em</option><option value="plo">Pot-Limit Omaha</option></select>
     </div>
@@ -327,7 +328,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 
   <div class="hero-row">
     <div class="label">🫵 Hero <span class="pos-tag" id="heroPosTag"></span></div>
-    <input type="number" id="heroBB" value="100" min="1">
+    <input type="number" id="heroBB" class="stack-input" value="100" min="1" inputmode="decimal" enterkeyhint="next">
     <span style="font-size:12px;color:var(--muted)">BB</span>
   </div>
   <div class="villain-list" id="villainBBList"></div>
@@ -399,7 +400,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
       <div class="action-grid" id="actionGrid"></div>
       <div class="amount-section" id="amountSection" style="display:none">
         <div class="amount-row">
-          <input type="number" id="betAmt" placeholder="Raise/Bet to (BB)" min="1" inputmode="decimal">
+          <input type="number" id="betAmt" placeholder="Total to (BB)" min="1" inputmode="decimal" enterkeyhint="done" onkeydown="if(event.key==='Enter'){event.preventDefault();confirmBetRaise();}">
           <button class="btn btn-primary btn-sm" style="width:auto;flex-shrink:0;padding:10px 16px" onclick="confirmBetRaise()">Confirm</button>
         </div>
         <div class="quick-row" id="quickRow"></div>
@@ -451,8 +452,11 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 
   <div class="hh-wrap">
     <div class="hh-head">
-      <span class="panel-title" style="margin:0">Hand history</span>
-      <button class="hh-copy" id="hhCopyBtn" onclick="copyHandHistory()">Copy</button>
+      <span class="panel-title" style="margin:0">Hand history (BB)</span>
+      <div style="display:flex;gap:6px">
+        <button class="hh-copy" id="hhCopyBtn" onclick="copyHandHistory()">📋 Copy</button>
+        <button class="hh-copy hh-wa" onclick="shareWhatsApp()">💬 WhatsApp</button>
+      </div>
     </div>
     <pre class="hh-body" id="handHistory"></pre>
   </div>
@@ -655,22 +659,40 @@ function refreshSetup() {
 }
 
 function goToStacks() {
-  S.bbSize=parseFloat($('bbSize').value)||1;
   S.gameType=$('gameType').value;
   $('heroPosTag').textContent=pos(S.heroSeat);
   buildVillainList();
   goToScreen('s-stacks');
+  // Auto-focus the first stack input for fast entry
+  setTimeout(()=>{ const el=$('heroBB'); if(el){ el.focus(); el.select&&el.select(); } }, 60);
 }
 function buildVillainList() {
   const el=$('villainBBList'); el.innerHTML='';
+  const last=vSeats().length-1;
   vSeats().forEach((si,vi)=>{
     const d=document.createElement('div'); d.className='villain-item';
     d.innerHTML=`
       <div class="vbadge">${vi+1}</div>
       <div class="vinfo"><div class="vname">Villain ${vi+1}</div><div class="vpos">${pos(si)}</div></div>
-      <input type="number" id="vbb-${si}" value="${S.initStacks[si]||100}" min="1">
+      <input type="number" id="vbb-${si}" class="stack-input" value="${S.initStacks[si]||100}" min="1" inputmode="decimal" enterkeyhint="${vi===last?'done':'next'}">
       <span style="font-size:11px;color:var(--muted)">BB</span>`;
     el.appendChild(d);
+  });
+  wireStackInputs();
+}
+// Pressing Enter/Next jumps to the next stack input; the last one advances the
+// screen. Selecting a field also highlights its value for instant overwrite.
+function wireStackInputs() {
+  const inputs=[...document.querySelectorAll('#s-stacks .stack-input')];
+  inputs.forEach((inp,i)=>{
+    inp.onfocus=()=>{ setTimeout(()=>inp.select&&inp.select(),0); };
+    inp.onkeydown=(e)=>{
+      if(e.key==='Enter'){
+        e.preventDefault();
+        if(i<inputs.length-1) inputs[i+1].focus();
+        else { inp.blur(); goToCards(); }
+      }
+    };
   });
 }
 
@@ -1407,12 +1429,12 @@ function showSummary() {
   const share = winners.length ? S.pot/winners.length : S.pot;
   $('summaryPot').innerHTML = split
     ? `Pot: <span>${fmtBB(S.pot)}</span> — ${fmtBB(share)} each`
-    : `Pot: <span>${fmtBB(S.pot)}</span> ($${(S.pot*S.bbSize).toFixed(2)})`;
+    : `Pot: <span>${fmtBB(S.pot)}</span>`;
 
   const hc=S.heroCards.map(c=>c?c.rank+c.suit:'?').join(' ');
   $('summaryInfo').innerHTML=`
     <h3>Hand Info</h3>
-    <div class="sum-row"><span class="k">Game</span><span class="v">${S.gameType==='nlhe'?"No-Limit Hold'em":"PLO"} · $${S.bbSize} BB</span></div>
+    <div class="sum-row"><span class="k">Game</span><span class="v">${S.gameType==='nlhe'?"No-Limit Hold'em":"PLO"}</span></div>
     <div class="sum-row"><span class="k">Hero cards</span><span class="v">${hc}</span></div>
     <div class="sum-row"><span class="k">Hero position</span><span class="v">${pos(S.heroSeat)}</span></div>
     <div class="sum-row"><span class="k">Players</span><span class="v">${Object.keys(S.players).length} total · ${vSeats().length} villain${vSeats().length!==1?'s':''}</span></div>
@@ -1431,7 +1453,7 @@ function showSummary() {
     d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4>`
       +(blinds?`<p style="color:#888">${blinds}</p>`:'')
       +`<p>${acts||'—'}</p>`
-      +(potEnd!=null?`<p style="color:var(--accent);font-weight:700">Pot after ${['preflop','flop','turn','river'][i]}: ${fmtBB(potEnd)} ($${(potEnd*S.bbSize).toFixed(2)})</p>`:'');
+      +(potEnd!=null?`<p style="color:var(--accent);font-weight:700">Pot after ${['preflop','flop','turn','river'][i]}: ${fmtBB(potEnd)}</p>`:'');
     ssl.appendChild(d);
   });
 
@@ -1487,7 +1509,7 @@ function buildInsights() {
 // ═══════════════════════════════════════════════
 // HAND HISTORY — PokerStars-style tracker format
 // ═══════════════════════════════════════════════
-function usd(bb){ return '$'+(bb*S.bbSize).toFixed(2); }
+function bbAmt(bb){ return fmtBB(bb); }
 function cn(c){ return c&&c.rank&&c.suit ? c.rank+SUIT_LETTER[c.suit] : ''; }
 function cardsStr(cards){ return cards.filter(c=>c&&c.rank&&c.suit).map(cn).join(' '); }
 function foldStreetOf(name){
@@ -1505,10 +1527,10 @@ function streetActionLines(streetKey){
     switch(a.action){
       case 'check': out.push(`${nm}: checks`); break;
       case 'fold':  out.push(`${nm}: folds`); break;
-      case 'call':  out.push(`${nm}: calls ${usd(a.amount)}`); break;
-      case 'bet':   out.push(`${nm}: bets ${usd(a.amount)}`); toMatch=a.amount; break;
-      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: raises ${usd(by)} to ${usd(a.amount)}`); toMatch=a.amount; break; }
-      case 'allin': out.push(`${nm}: bets ${usd(a.amount)} and is all-in`); toMatch=Math.max(toMatch,a.amount); break;
+      case 'call':  out.push(`${nm}: calls ${bbAmt(a.amount)}`); break;
+      case 'bet':   out.push(`${nm}: bets ${bbAmt(a.amount)}`); toMatch=a.amount; break;
+      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: raises ${bbAmt(by)} to ${bbAmt(a.amount)}`); toMatch=a.amount; break; }
+      case 'allin': out.push(`${nm}: bets ${bbAmt(a.amount)} and is all-in`); toMatch=Math.max(toMatch,a.amount); break;
     }
   });
   return out;
@@ -1521,14 +1543,14 @@ function buildHandHistory(){
   const seatNum={}; order.forEach((si,i)=>seatNum[si]=i+1);
   const btnSi = order.includes(8) ? 8 : order[order.length-1];
 
-  L.push(`Poker Hand Explainer  ${gameLabel} (${usd(0.5)}/${usd(1)}) - ${ts}`);
+  L.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
   L.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
   order.forEach(si=>{
     const p=S.players[si];
-    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) (${usd(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} in chips)`);
+    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} in chips)`);
   });
   (S.logs.preflop||[]).filter(a=>a.action==='post').forEach(a=>{
-    L.push(`${a.player}: posts ${a.amount<=0.5?'small':'big'} blind ${usd(a.amount)}`);
+    L.push(`${a.player}: posts ${a.amount<=0.5?'small':'big'} blind ${bbAmt(a.amount)}`);
   });
 
   L.push('*** HOLE CARDS ***');
@@ -1555,10 +1577,10 @@ function buildHandHistory(){
       } else L.push(`${p.name}: mucks hand`);
     });
   }
-  winners.forEach(wp=>L.push(`${wp.name} collected ${usd(share)} from pot`));
+  winners.forEach(wp=>L.push(`${wp.name} collected ${bbAmt(share)} from pot`));
 
   L.push('*** SUMMARY ***');
-  L.push(`Total pot ${usd(S.pot)} | Rake ${usd(0)}`);
+  L.push(`Total pot ${bbAmt(S.pot)} | Rake ${bbAmt(0)}`);
   const board=[...flop,...turn,...river];
   if(board.length) L.push(`Board [${cardsStr(board)}]`);
   order.forEach(si=>{
@@ -1571,7 +1593,7 @@ function buildHandHistory(){
       tail = fs==='preflop' ? 'folded before Flop' : (fs ? 'folded on the '+fs.charAt(0).toUpperCase()+fs.slice(1) : 'folded');
     } else if(isWin){
       let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` with ${r.hand}`; }
-      tail = cards ? `showed [${cardsStr(cards)}] and won (${usd(share)})${hn}` : `collected (${usd(share)})`;
+      tail = cards ? `showed [${cardsStr(cards)}] and won (${bbAmt(share)})${hn}` : `collected (${bbAmt(share)})`;
     } else {
       let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` with ${r.hand}`; }
       tail = cards ? `showed [${cardsStr(cards)}] and lost${hn}` : 'mucked';
@@ -1583,12 +1605,21 @@ function buildHandHistory(){
 function copyHandHistory(){
   const txt=$('handHistory').textContent;
   if(navigator.clipboard&&navigator.clipboard.writeText){
-    navigator.clipboard.writeText(txt).then(()=>toast('Hand history copied')).catch(()=>toast('Copy failed'));
+    navigator.clipboard.writeText(txt).then(()=>toast('Copied — paste into WhatsApp')).catch(()=>toast('Copy failed'));
   } else {
     const ta=document.createElement('textarea'); ta.value=txt; document.body.appendChild(ta);
-    ta.select(); try{ document.execCommand('copy'); toast('Hand history copied'); }catch(e){ toast('Copy failed'); }
+    ta.select(); try{ document.execCommand('copy'); toast('Copied — paste into WhatsApp'); }catch(e){ toast('Copy failed'); }
     document.body.removeChild(ta);
   }
+}
+// Open WhatsApp with the hand history prefilled (native share on mobile if available)
+function shareWhatsApp(){
+  const txt=$('handHistory').textContent;
+  if(navigator.share){
+    navigator.share({ text: txt }).catch(()=>{});
+    return;
+  }
+  window.open('https://wa.me/?text='+encodeURIComponent(txt), '_blank');
 }
 
 // ═══════════════════════════════════════════════
