@@ -288,6 +288,19 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
 .pot-line span { color: var(--accent); font-weight: 700; }
 .divider { width: 100%; height: 1px; background: #222; }
 
+/* ── LANGUAGE TOGGLE ─── */
+.lang-toggle { display: flex; gap: 0; border: 1px solid #333; border-radius: 20px; overflow: hidden; align-self: center; }
+.lang-btn { background: #1a1a1a; color: var(--muted); border: none; font-size: 13px; font-weight: 700; padding: 7px 18px; cursor: pointer; }
+.lang-btn.active { background: var(--accent); color: #000; }
+/* RTL recap: flip text alignment and the hand-history block */
+#s-summary[dir="rtl"] { text-align: right; }
+#s-summary[dir="rtl"] .sum-row { flex-direction: row-reverse; }
+#s-summary[dir="rtl"] .ss-item { border-left: none; border-right: 3px solid var(--accent); }
+#s-summary[dir="rtl"] .ss-item.flop { border-right-color: #4a8; }
+#s-summary[dir="rtl"] .ss-item.turn { border-right-color: var(--accent2); }
+#s-summary[dir="rtl"] .ss-item.river { border-right-color: #a44; }
+#s-summary[dir="rtl"] .hh-body { direction: rtl; text-align: right; }
+
 /* ── TOAST ─── */
 #toast { position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%) translateY(16px); background: #252525; border: 1px solid #444; border-radius: 20px; padding: 9px 18px; font-size: 13px; opacity: 0; transition: all .25s; pointer-events: none; z-index: 300; white-space: nowrap; }
 #toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
@@ -457,7 +470,13 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
 
 <!-- ══ S6: SUMMARY ═══════════════════════════════════════ -->
 <div class="screen" id="s-summary">
-  <div class="s-title">Hand Summary</div>
+  <div class="s-title" id="summaryScreenTitle">Hand Summary</div>
+
+  <div class="lang-toggle" id="langToggle" style="display:none">
+    <button id="langEn" class="lang-btn active" onclick="setLang('en')">English</button>
+    <button id="langHe" class="lang-btn" onclick="setLang('he')">עברית</button>
+  </div>
+
   <div class="trophy" id="summaryTrophy">🏆</div>
   <div class="winner-headline" id="summaryWinner"></div>
   <div class="pot-line" id="summaryPot"></div>
@@ -467,7 +486,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
 
   <div class="panel" id="recapPrefixWrap" style="display:none">
     <div class="field">
-      <label>Prefix / question for your friends</label>
+      <label id="prefixLabel">Prefix / question for your friends</label>
       <textarea id="handPrefix" rows="2" placeholder="e.g. 100BB deep, villain is loose-aggressive. What's your move?"></textarea>
     </div>
   </div>
@@ -477,7 +496,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
       <span class="panel-title" style="margin:0">Hand history (BB)</span>
       <div style="display:flex;gap:6px">
         <button class="hh-copy" id="hhCopyBtn" onclick="copyHandHistory()">📋 Copy</button>
-        <button class="hh-copy hh-wa" onclick="shareWhatsApp()">💬 WhatsApp</button>
+        <button class="hh-copy hh-wa" id="hhWaBtn" onclick="shareWhatsApp()">💬 WhatsApp</button>
       </div>
     </div>
     <pre class="hh-body" id="handHistory"></pre>
@@ -486,7 +505,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
   <div class="insight-box" id="insightBox"></div>
   <div class="bottom-nav">
     <button class="btn btn-primary" id="recapResumeBtn" onclick="resumeHand()" style="display:none">▶ Resume hand</button>
-    <button class="btn btn-secondary" onclick="restartApp()">🔄 New Hand</button>
+    <button class="btn btn-secondary" id="newHandBtn" onclick="restartApp()">🔄 New Hand</button>
   </div>
 </div>
 
@@ -520,6 +539,56 @@ const RANK_SINGULAR = {2:'Two',3:'Three',4:'Four',5:'Five',6:'Six',7:'Seven',8:'
 const RANK_PLURAL = {2:'Twos',3:'Threes',4:'Fours',5:'Fives',6:'Sixes',7:'Sevens',8:'Eights',9:'Nines',10:'Tens',11:'Jacks',12:'Queens',13:'Kings',14:'Aces'};
 // Suit symbol → letter (poker-tracker notation)
 const SUIT_LETTER = { '♠':'s','♥':'h','♦':'d','♣':'c' };
+
+// ── Recap translations (English / Hebrew) ──
+const T = {
+  en: {
+    seat:'Seat', inChips:'in chips',
+    holeCards:'HOLE CARDS', dealtTo:'Dealt to Hero',
+    currentSituation:'CURRENT SITUATION', actionOn:'Action on',
+    toCallTxt:'to call', noBetTxt:'no bet (check or bet)', stacksTxt:'Stacks:',
+    whatWouldYouDo:'>>> What would you do here?',
+    headline:'What would you do here?', theSituation:'The situation',
+    heroCards:'Your cards', heroPos:'Your position', board:'Board', potWord:'Pot', toAct:'To act',
+    checkOrBet:'check or bet',
+    potAfter:'Pot after', potNow:'Pot now', left:'Left',
+    postsSmall:'posts small blind', postsBig:'posts big blind',
+    prefixLabel:'Prefix / question for your friends',
+    prefixPh:"e.g. 100BB deep, villain is loose-aggressive. What's your move?",
+    insight:"💡 Add a prefix above, then tap Copy or WhatsApp to send the spot and ask friends: what's the best play here? Hit Resume hand to keep going.",
+    resume:'▶ Resume hand', copy:'📋 Copy', whatsapp:'💬 WhatsApp', newHand:'🔄 New Hand',
+    streets:['Preflop','Flop','Turn','River'],
+    streetHdr:['','FLOP','TURN','RIVER'],
+    verbs:{ post:'posts', check:'checks', fold:'folds', call:'calls', bet:'bets', raise:'raises', allin:'all-in' },
+    raisesTo:(by,to)=>`raises ${by} to ${to}`, callsAmt:t=>`calls ${t}`, betsAmt:t=>`bets ${t}`,
+    allinAmt:t=>`bets ${t} and is all-in`,
+  },
+  he: {
+    seat:'מושב', inChips:'בסטאק',
+    holeCards:'קלפי יד', dealtTo:'חולקו לך',
+    currentSituation:'המצב הנוכחי', actionOn:'התור של',
+    toCallTxt:'להשוואה', noBetTxt:'אין הימור (צ׳ק או הימור)', stacksTxt:'סטאקים:',
+    whatWouldYouDo:'<<< מה היית עושה כאן?',
+    headline:'מה היית עושה כאן?', theSituation:'המצב',
+    heroCards:'הקלפים שלך', heroPos:'המיקום שלך', board:'בורד', potWord:'קופה', toAct:'בתור',
+    checkOrBet:'צ׳ק או הימור',
+    potAfter:'קופה אחרי', potNow:'קופה עכשיו', left:'נשאר',
+    postsSmall:'מניח בליינד קטן', postsBig:'מניח בליינד גדול',
+    prefixLabel:'טקסט / שאלה לחברים',
+    prefixPh:'לדוגמה: 100BB עמוק, היריב לוז-אגרסיבי. מה המהלך?',
+    insight:'💡 הוסף טקסט למעלה, ואז לחץ העתק או וואטסאפ כדי לשלוח את המצב ולשאול חברים: מה המהלך הטוב ביותר כאן? לחץ המשך יד כדי להמשיך.',
+    resume:'▶ המשך יד', copy:'📋 העתק', whatsapp:'💬 וואטסאפ', newHand:'🔄 יד חדשה',
+    streets:['פריפלופ','פלופ','טרן','ריבר'],
+    streetHdr:['','פלופ','טרן','ריבר'],
+    verbs:{ post:'מניח', check:'צ׳ק', fold:'מקפל', call:'קורא', bet:'מהמר', raise:'מעלה', allin:'אול-אין' },
+    raisesTo:(by,to)=>`מעלה ל-${to}`, callsAmt:t=>`קורא ${t}`, betsAmt:t=>`מהמר ${t}`,
+    allinAmt:t=>`מהמר ${t} והולך אול-אין`,
+  },
+};
+// Language applies to the recap only; the final summary stays English.
+function curLang(){ return S.recapMode ? (S.lang||'en') : 'en'; }
+function L(k){ const d=T[curLang()]; return (d&&d[k]!=null)?d[k]:T.en[k]; }
+function isRTL(){ return curLang()==='he'; }
 
 // Seat positions (left%, top%) relative to 320×210 container
 const SEAT_POS = [
@@ -566,6 +635,7 @@ const S = {
   recapMode: false,      // showing a mid-hand "what would you do?" snapshot
   resumeScreen: 's-street',
   handPrefix: '',        // user-entered intro text prepended to the recap
+  lang: 'en',            // recap language: 'en' | 'he'
   // Card picker state
   picker: null,   // { slots:[{rank,suit}], focusIdx, containerId, deckId, onChange }
 };
@@ -1453,24 +1523,26 @@ function goToResultScreen() {
 // Street-by-street action list (shared by the final summary and the recap).
 function renderStreetSummaries() {
   const ssl=$('streetSummaries'); ssl.innerHTML='';
+  const verbs=L('verbs'), streets=L('streets');
   ['preflop','flop','turn','river'].forEach((s,i)=>{
     const log=S.logs[s]||[];
     if(!log.length) return;
     const cc=ccStr(s);
-    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} posts ${fmtBB(a.amount)}`).join(', ');
-    const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
+    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} ${verbs.post} ${fmtBB(a.amount)}`).join(', ');
+    const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${verbs[a.action]||a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
     const st=streetEndState(s);
     // Each player's remaining BB at this step, shown next to their name
     const stacksLine=Object.keys(st.stacks).map(Number).sort((a,b)=>a-b).map(si=>{
       const p=S.players[si];
       return `${p.name} ${fmtBB(st.stacks[si])}${p.folded?'✗':''}`;
     }).join(' · ');
+    const potLbl = st.live ? L('potNow') : `${L('potAfter')} ${streets[i]}`;
     const d=document.createElement('div'); d.className=`ss-item ${s}`;
-    d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4>`
+    d.innerHTML=`<h4>${streets[i]}${cc?' · '+cc:''}</h4>`
       +(blinds?`<p style="color:#888">${blinds}</p>`:'')
       +`<p>${acts||'—'}</p>`
-      +`<p style="color:var(--accent);font-weight:700">Pot ${st.live?'now':'after '+['preflop','flop','turn','river'][i]}: ${fmtBB(st.pot)}</p>`
-      +`<p style="color:var(--muted);font-size:12px">Left: ${stacksLine}</p>`;
+      +`<p style="color:var(--accent);font-weight:700">${potLbl}: ${fmtBB(st.pot)}</p>`
+      +`<p style="color:var(--muted);font-size:12px">${L('left')}: ${stacksLine}</p>`;
     ssl.appendChild(d);
   });
 }
@@ -1483,18 +1555,31 @@ function endHandRecap() {
 function resumeHand() {
   S.recapMode = false;
   $('recapResumeBtn').style.display='none';
+  $('s-summary').setAttribute('dir','ltr');
   goToScreen(S.resumeScreen || 's-street');
 }
-function showRecap() {
-  // Current decision point
+function setLang(lang) {
+  S.lang = lang;
+  $('langEn').classList.toggle('active', lang==='en');
+  $('langHe').classList.toggle('active', lang==='he');
+  showRecap(true); // re-render in the chosen language (skip re-focusing the prefix)
+}
+function showRecap(skipFocus) {
   const cur = S.players[S.ss.queue && S.ss.queue[0]];
-  const streetName = ['Preflop','Flop','Turn','River'][S.streetIdx] || '';
+  const rtl = isRTL();
+  $('s-summary').setAttribute('dir', rtl?'rtl':'ltr');
+
+  // Language toggle (recap only)
+  $('langToggle').style.display='flex';
+  $('langEn').classList.toggle('active', curLang()==='en');
+  $('langHe').classList.toggle('active', curLang()==='he');
+
   $('summaryTrophy').textContent='🤔';
-  $('summaryWinner').textContent='What would you do here?';
-  let situation = `${streetName} · Pot ${fmtBB(S.pot)}`;
+  $('summaryWinner').textContent=L('headline');
+  let situation = `${L('streets')[S.streetIdx]} · ${L('potWord')} ${fmtBB(S.pot)}`;
   if(cur){
     const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
-    situation += ` · Action on ${cur.name} (${pos(cur.seatIdx)})` + (toCall>0?` — ${fmtBB(toCall)} to call`:` — check or bet`);
+    situation += ` · ${L('actionOn')} ${cur.name} (${pos(cur.seatIdx)})` + (toCall>0?` — ${fmtBB(toCall)} ${L('toCallTxt')}`:` — ${L('checkOrBet')}`);
   }
   $('summaryPot').textContent=situation;
 
@@ -1502,29 +1587,36 @@ function showRecap() {
   const hc=S.heroCards.map(c=>c?c.rank+c.suit:'?').join(' ');
   const board=[...S.communityCards.flop,...S.communityCards.turn,...S.communityCards.river].filter(c=>c&&c.rank&&c.suit).map(c=>c.rank+c.suit).join(' ');
   $('summaryInfo').innerHTML=`
-    <h3>The situation</h3>
-    <div class="sum-row"><span class="k">Hero cards</span><span class="v">${hc}</span></div>
-    <div class="sum-row"><span class="k">Hero position</span><span class="v">${pos(S.heroSeat)}</span></div>
-    <div class="sum-row"><span class="k">Board</span><span class="v">${board||'—'}</span></div>
-    <div class="sum-row"><span class="k">Pot</span><span class="v">${fmtBB(S.pot)}</span></div>
-    ${cur?`<div class="sum-row"><span class="k">To act</span><span class="v">${cur.name} (${pos(cur.seatIdx)})</span></div>`:''}`;
+    <h3>${L('theSituation')}</h3>
+    <div class="sum-row"><span class="k">${L('heroCards')}</span><span class="v">${hc}</span></div>
+    <div class="sum-row"><span class="k">${L('heroPos')}</span><span class="v">${pos(S.heroSeat)}</span></div>
+    <div class="sum-row"><span class="k">${L('board')}</span><span class="v">${board||'—'}</span></div>
+    <div class="sum-row"><span class="k">${L('potWord')}</span><span class="v">${fmtBB(S.pot)}</span></div>
+    ${cur?`<div class="sum-row"><span class="k">${L('toAct')}</span><span class="v">${cur.name} (${pos(cur.seatIdx)})</span></div>`:''}`;
 
-  // Street-by-street action so far — each step now lists pot + BB left per player
+  // Street-by-street action so far — each step lists pot + BB left per player
   renderStreetSummaries();
 
-  // Prefix input — ask the user for an intro/question to prepend to the hand
+  // Prefix input
   const prefixWrap=$('recapPrefixWrap');
   const prefixEl=$('handPrefix');
   prefixWrap.style.display='block';
+  $('prefixLabel').textContent=L('prefixLabel');
+  prefixEl.placeholder=L('prefixPh');
+  prefixEl.setAttribute('dir', rtl?'rtl':'ltr');
   prefixEl.value=S.handPrefix||'';
   prefixEl.oninput=()=>{ S.handPrefix=prefixEl.value; $('handHistory').textContent=buildHandHistory(true); };
 
   $('handHistory').textContent=buildHandHistory(true);
-  $('insightBox').innerHTML=`<p>💡 Add a prefix above, then tap 📋 Copy or 💬 WhatsApp to send the spot and ask friends <strong>what's the best play here?</strong> Hit ▶ Resume hand to keep going.</p>`;
+  $('insightBox').innerHTML=`<p>${L('insight')}</p>`;
+  // Localise the shared buttons
+  $('recapResumeBtn').textContent=L('resume');
+  $('hhCopyBtn').textContent=L('copy');
+  $('hhWaBtn').textContent=L('whatsapp');
+  $('newHandBtn').textContent=L('newHand');
   $('recapResumeBtn').style.display='block';
   goToScreen('s-summary');
-  // Auto-focus the prefix so you can type your question right away
-  setTimeout(()=>{ prefixEl.focus(); }, 80);
+  if(!skipFocus) setTimeout(()=>{ prefixEl.focus(); }, 80);
 }
 
 // ═══════════════════════════════════════════════
@@ -1534,6 +1626,12 @@ function showSummary() {
   S.recapMode=false;
   $('recapResumeBtn').style.display='none';
   $('recapPrefixWrap').style.display='none';
+  $('langToggle').style.display='none';
+  $('s-summary').setAttribute('dir','ltr');
+  // Restore English labels for the final summary
+  $('hhCopyBtn').textContent='📋 Copy';
+  $('hhWaBtn').textContent='💬 WhatsApp';
+  $('newHandBtn').textContent='🔄 New Hand';
   const w=S.winner;
   const winners=(S.winners&&S.winners.length)?S.winners:(w?[w]:[]);
   const split=winners.length>1;
@@ -1629,93 +1727,98 @@ function foldStreetOf(name){
   return null;
 }
 // One tracker line per action on a street, reconstructing raise "by" amounts.
+// Uses the recap language via L() (English in the final summary).
 function streetActionLines(streetKey){
   const out=[];
   let toMatch = streetKey==='preflop' ? 1 : 0; // preflop the BB (1) is the price
+  const v=L('verbs');
   (S.logs[streetKey]||[]).forEach(a=>{
     if(a.action==='post') return;
     const nm=a.player;
     switch(a.action){
-      case 'check': out.push(`${nm}: checks`); break;
-      case 'fold':  out.push(`${nm}: folds`); break;
-      case 'call':  out.push(`${nm}: calls ${bbAmt(a.amount)}`); break;
-      case 'bet':   out.push(`${nm}: bets ${bbAmt(a.amount)}`); toMatch=a.amount; break;
-      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: raises ${bbAmt(by)} to ${bbAmt(a.amount)}`); toMatch=a.amount; break; }
-      case 'allin': out.push(`${nm}: bets ${bbAmt(a.amount)} and is all-in`); toMatch=Math.max(toMatch,a.amount); break;
+      case 'check': out.push(`${nm}: ${v.check}`); break;
+      case 'fold':  out.push(`${nm}: ${v.fold}`); break;
+      case 'call':  out.push(`${nm}: ${L('callsAmt')(bbAmt(a.amount))}`); break;
+      case 'bet':   out.push(`${nm}: ${L('betsAmt')(bbAmt(a.amount))}`); toMatch=a.amount; break;
+      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: ${L('raisesTo')(bbAmt(by), bbAmt(a.amount))}`); toMatch=a.amount; break; }
+      case 'allin': out.push(`${nm}: ${L('allinAmt')(bbAmt(a.amount))}`); toMatch=Math.max(toMatch,a.amount); break;
     }
   });
   return out;
 }
 function buildHandHistory(midHand){
-  const L=[];
+  const HH=[];
   const gameLabel = S.gameType==='nlhe' ? "Hold'em No Limit" : "Omaha Pot Limit";
   const ts = new Date().toISOString().slice(0,19).replace('T',' ');
   const order = Object.keys(S.players).map(Number).sort((a,b)=>a-b);
   const seatNum={}; order.forEach((si,i)=>seatNum[si]=i+1);
   const btnSi = order.includes(8) ? 8 : order[order.length-1];
+  const foldMark = curLang()==='he' ? 'מקופל' : 'folded';
 
   if(midHand){
     // Recap: no tracker header — start at Seat 1, with the user's prefix on top.
-    if(S.handPrefix && S.handPrefix.trim()){ L.push(S.handPrefix.trim()); L.push(''); }
+    if(S.handPrefix && S.handPrefix.trim()){ HH.push(S.handPrefix.trim()); HH.push(''); }
   } else {
-    L.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
-    L.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
+    HH.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
+    HH.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
   }
   order.forEach(si=>{
     const p=S.players[si];
-    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} in chips)`);
+    HH.push(`${L('seat')} ${seatNum[si]}: ${p.name} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} ${L('inChips')})`);
   });
   (S.logs.preflop||[]).filter(a=>a.action==='post').forEach(a=>{
-    L.push(`${a.player}: posts ${a.amount<=0.5?'small':'big'} blind ${bbAmt(a.amount)}`);
+    HH.push(`${a.player}: ${a.amount<=0.5?L('postsSmall'):L('postsBig')} ${bbAmt(a.amount)}`);
   });
 
-  L.push('*** HOLE CARDS ***');
-  L.push(`Dealt to Hero [${cardsStr(S.heroCards)}]`);
-  streetActionLines('preflop').forEach(x=>L.push(x));
+  HH.push(`*** ${L('holeCards')} ***`);
+  HH.push(`${L('dealtTo')} [${cardsStr(S.heroCards)}]`);
+  streetActionLines('preflop').forEach(x=>HH.push(x));
 
   const flop=S.communityCards.flop.filter(c=>c&&c.rank&&c.suit);
   const turn=S.communityCards.turn.filter(c=>c&&c.rank&&c.suit);
   const river=S.communityCards.river.filter(c=>c&&c.rank&&c.suit);
-  if(flop.length===3){ L.push(`*** FLOP *** [${cardsStr(flop)}]`); streetActionLines('flop').forEach(x=>L.push(x)); }
-  if(turn.length===1){ L.push(`*** TURN *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines('turn').forEach(x=>L.push(x)); }
-  if(river.length===1){ L.push(`*** RIVER *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines('river').forEach(x=>L.push(x)); }
+  const sh=L('streetHdr');
+  if(flop.length===3){ HH.push(`*** ${sh[1]} *** [${cardsStr(flop)}]`); streetActionLines('flop').forEach(x=>HH.push(x)); }
+  if(turn.length===1){ HH.push(`*** ${sh[2]} *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines('turn').forEach(x=>HH.push(x)); }
+  if(river.length===1){ HH.push(`*** ${sh[3]} *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines('river').forEach(x=>HH.push(x)); }
 
   // Mid-hand recap: stop here with a "what would you do?" snapshot instead of
   // the showdown/summary, since the hand isn't finished.
   if(midHand){
-    L.push('');
-    L.push('*** CURRENT SITUATION ***');
-    L.push(`Pot: ${bbAmt(S.pot)}`);
+    HH.push('');
+    HH.push(`*** ${L('currentSituation')} ***`);
+    HH.push(`${L('potWord')}: ${bbAmt(S.pot)}`);
     const cur=S.players[S.ss.queue && S.ss.queue[0]];
     if(cur){
       const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
-      L.push(`Action on ${cur.name} (${pos(cur.seatIdx)}) — ${toCall>0?('to call '+bbAmt(toCall)):'no bet (check or bet)'}`);
+      HH.push(`${L('actionOn')} ${cur.name} (${pos(cur.seatIdx)}) — ${toCall>0?(L('toCallTxt')+' '+bbAmt(toCall)):L('noBetTxt')}`);
     }
-    L.push('Stacks:');
-    order.forEach(si=>{ const p=S.players[si]; L.push(`  ${p.name} (${pos(si)}): ${bbAmt(p.stack)}${p.folded?' (folded)':''}`); });
-    L.push('>>> What would you do here?');
-    return L.join('\n');
+    HH.push(L('stacksTxt'));
+    order.forEach(si=>{ const p=S.players[si]; HH.push(`  ${p.name} (${pos(si)}): ${bbAmt(p.stack)}${p.folded?' ('+foldMark+')':''}`); });
+    HH.push(L('whatWouldYouDo'));
+    return HH.join('\n');
   }
 
+  // ── Final summary (always English) ──
   const winners=(S.winners&&S.winners.length)?S.winners:(S.winner?[S.winner]:[]);
   const share = winners.length ? S.pot/winners.length : S.pot;
   const contenders = order.map(si=>S.players[si]).filter(p=>!p.folded);
   if(!S.endedByFold && contenders.length>1){
-    L.push('*** SHOW DOWN ***');
+    HH.push('*** SHOW DOWN ***');
     contenders.forEach(p=>{
       const cards=knownHoleCards(p);
       if(cards){
         let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` (${r.hand})`; }
-        L.push(`${p.name}: shows [${cardsStr(cards)}]${hn}`);
-      } else L.push(`${p.name}: mucks hand`);
+        HH.push(`${p.name}: shows [${cardsStr(cards)}]${hn}`);
+      } else HH.push(`${p.name}: mucks hand`);
     });
   }
-  winners.forEach(wp=>L.push(`${wp.name} collected ${bbAmt(share)} from pot`));
+  winners.forEach(wp=>HH.push(`${wp.name} collected ${bbAmt(share)} from pot`));
 
-  L.push('*** SUMMARY ***');
-  L.push(`Total pot ${bbAmt(S.pot)} | Rake ${bbAmt(0)}`);
+  HH.push('*** SUMMARY ***');
+  HH.push(`Total pot ${bbAmt(S.pot)} | Rake ${bbAmt(0)}`);
   const board=[...flop,...turn,...river];
-  if(board.length) L.push(`Board [${cardsStr(board)}]`);
+  if(board.length) HH.push(`Board [${cardsStr(board)}]`);
   order.forEach(si=>{
     const p=S.players[si];
     const cards=knownHoleCards(p);
@@ -1731,9 +1834,9 @@ function buildHandHistory(midHand){
       let hn=''; if(S.autoResolved&&S.showdownResults){ const r=S.showdownResults.find(x=>x.p===p); if(r) hn=` with ${r.hand}`; }
       tail = cards ? `showed [${cardsStr(cards)}] and lost${hn}` : 'mucked';
     }
-    L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) ${tail}`);
+    HH.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) ${tail}`);
   });
-  return L.join('\n');
+  return HH.join('\n');
 }
 function copyHandHistory(){
   const txt=$('handHistory').textContent;
