@@ -88,8 +88,8 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
 /* ── FORMS ─── */
 .field { width: 100%; display: flex; flex-direction: column; gap: 6px; }
 .field label { font-size: 12px; color: var(--muted); font-weight: 700; text-transform: uppercase; letter-spacing: .4px; }
-.field input, .field select { width: 100%; padding: 12px 14px; border-radius: var(--radius); background: #1a1a1a; border: 1px solid #333; color: var(--text); font-size: 16px; outline: none; -webkit-appearance: none; }
-.field input:focus, .field select:focus { border-color: var(--accent); }
+.field input, .field select, .field textarea { width: 100%; padding: 12px 14px; border-radius: var(--radius); background: #1a1a1a; border: 1px solid #333; color: var(--text); font-size: 16px; outline: none; -webkit-appearance: none; font-family: inherit; resize: vertical; }
+.field input:focus, .field select:focus, .field textarea:focus { border-color: var(--accent); }
 
 /* ── PANEL ─── */
 .panel { width: 100%; background: #161616; border: 1px solid #262626; border-radius: var(--radius); padding: 14px; display: flex; flex-direction: column; gap: 10px; }
@@ -464,6 +464,13 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
   <div class="summary-card" id="summaryInfo"></div>
   <div class="street-summaries" id="streetSummaries"></div>
 
+  <div class="panel" id="recapPrefixWrap" style="display:none">
+    <div class="field">
+      <label>Prefix / question for your friends</label>
+      <textarea id="handPrefix" rows="2" placeholder="e.g. 100BB deep, villain is loose-aggressive. What's your move?"></textarea>
+    </div>
+  </div>
+
   <div class="hh-wrap">
     <div class="hh-head">
       <span class="panel-title" style="margin:0">Hand history (BB)</span>
@@ -556,6 +563,7 @@ const S = {
   potByStreet: {}, // streetKey → pot size at end of that street's betting
   recapMode: false,      // showing a mid-hand "what would you do?" snapshot
   resumeScreen: 's-street',
+  handPrefix: '',        // user-entered intro text prepended to the recap
   // Card picker state
   picker: null,   // { slots:[{rank,suit}], focusIdx, containerId, deckId, onChange }
 };
@@ -827,6 +835,7 @@ function startHand() {
   S.autoResolved=false;
   S.showdownResults=null;
   S.potByStreet={};
+  S.handPrefix='';
   initStreet();
 }
 
@@ -1497,10 +1506,19 @@ function showRecap() {
   stackItem.innerHTML=`<h4>Stacks now</h4><p>${rows}</p>`;
   shownReveal.appendChild(stackItem);
 
+  // Prefix input — ask the user for an intro/question to prepend to the hand
+  const prefixWrap=$('recapPrefixWrap');
+  const prefixEl=$('handPrefix');
+  prefixWrap.style.display='block';
+  prefixEl.value=S.handPrefix||'';
+  prefixEl.oninput=()=>{ S.handPrefix=prefixEl.value; $('handHistory').textContent=buildHandHistory(true); };
+
   $('handHistory').textContent=buildHandHistory(true);
-  $('insightBox').innerHTML=`<p>💡 Show this to your friends and ask: <strong>what's the best play here?</strong> Tap 📋 Copy or 💬 WhatsApp to send the situation. Hit ▶ Resume hand to keep going.</p>`;
+  $('insightBox').innerHTML=`<p>💡 Add a prefix above, then tap 📋 Copy or 💬 WhatsApp to send the spot and ask friends <strong>what's the best play here?</strong> Hit ▶ Resume hand to keep going.</p>`;
   $('recapResumeBtn').style.display='block';
   goToScreen('s-summary');
+  // Auto-focus the prefix so you can type your question right away
+  setTimeout(()=>{ prefixEl.focus(); }, 80);
 }
 
 // ═══════════════════════════════════════════════
@@ -1509,6 +1527,7 @@ function showRecap() {
 function showSummary() {
   S.recapMode=false;
   $('recapResumeBtn').style.display='none';
+  $('recapPrefixWrap').style.display='none';
   const w=S.winner;
   const winners=(S.winners&&S.winners.length)?S.winners:(w?[w]:[]);
   const split=winners.length>1;
@@ -1629,8 +1648,13 @@ function buildHandHistory(midHand){
   const seatNum={}; order.forEach((si,i)=>seatNum[si]=i+1);
   const btnSi = order.includes(8) ? 8 : order[order.length-1];
 
-  L.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
-  L.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
+  if(midHand){
+    // Recap: no tracker header — start at Seat 1, with the user's prefix on top.
+    if(S.handPrefix && S.handPrefix.trim()){ L.push(S.handPrefix.trim()); L.push(''); }
+  } else {
+    L.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
+    L.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
+  }
   order.forEach(si=>{
     const p=S.players[si];
     L.push(`Seat ${seatNum[si]}: ${p.name} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} in chips)`);
@@ -1738,9 +1762,10 @@ function restartApp() {
     ss:{contributions:{},currentBet:0,queue:[],lastRaiseSize:0},
     winner:null, winners:[], picker:null, endedByFold:false,
     autoResolved:false, showdownResults:null, startStacks:{}, potByStreet:{},
-    recapMode:false, resumeScreen:'s-street',
+    recapMode:false, resumeScreen:'s-street', handPrefix:'',
   });
   $('recapResumeBtn').style.display='none';
+  $('recapPrefixWrap').style.display='none';
   refreshSetup();
   goToScreen('s-setup');
 }
