@@ -28,8 +28,11 @@ body { background: var(--bg); color: var(--text); font-family: -apple-system, Bl
 
 /* ── HEADER ─── */
 header { width: 100%; padding: 12px 16px 10px; background: #111; border-bottom: 1px solid #222; display: flex; align-items: center; gap: 10px; position: sticky; top: 0; z-index: 100; }
-header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
+header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space: nowrap; }
+.recap-btn { margin-left: auto; background: #8b2020; color: #fff; border: 1px solid #b33; font-size: 12px; font-weight: 800; padding: 7px 12px; border-radius: 18px; cursor: pointer; white-space: nowrap; box-shadow: 0 0 0 2px rgba(232,74,74,.15); }
+.recap-btn:active { transform: scale(.94); }
 .step-dots { display: flex; gap: 5px; margin-left: auto; }
+.recap-btn + .step-dots { margin-left: 8px; }
 .step-dot { width: 7px; height: 7px; border-radius: 50%; background: #333; transition: background .3s; }
 .step-dot.done { background: #4a8; }
 .step-dot.active { background: var(--accent); }
@@ -293,7 +296,8 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 <body>
 
 <header>
-  <h1>♠ Poker Hand Explainer</h1>
+  <h1>♠ Poker Explainer</h1>
+  <button id="recapBtn" class="recap-btn" onclick="endHandRecap()" style="display:none">🤔 Recap</button>
   <div class="step-dots" id="stepDots"></div>
 </header>
 
@@ -473,6 +477,7 @@ header h1 { font-size: 17px; font-weight: 700; color: var(--accent); }
 
   <div class="insight-box" id="insightBox"></div>
   <div class="bottom-nav">
+    <button class="btn btn-primary" id="recapResumeBtn" onclick="resumeHand()" style="display:none">▶ Resume hand</button>
     <button class="btn btn-secondary" onclick="restartApp()">🔄 New Hand</button>
   </div>
 </div>
@@ -549,6 +554,8 @@ const S = {
   showdownResults: null, // [{p, cards, score, handName}] when auto-resolved
   startStacks: {},       // seatIdx → starting stack (snapshot at start of hand)
   potByStreet: {}, // streetKey → pot size at end of that street's betting
+  recapMode: false,      // showing a mid-hand "what would you do?" snapshot
+  resumeScreen: 's-street',
   // Card picker state
   picker: null,   // { slots:[{rank,suit}], focusIdx, containerId, deckId, onChange }
 };
@@ -606,6 +613,9 @@ function goToScreen(id) {
   $(id).classList.add('active');
   window.scrollTo(0,0);
   renderDots(id);
+  // The "Recap / ask friends" button is available whenever a hand is in play
+  const showRecapBtn = (id==='s-street' || id==='s-showdown' || id==='s-result');
+  $('recapBtn').style.display = showRecapBtn ? 'inline-block' : 'none';
 }
 function renderDots(activeId) {
   const el=$('stepDots'); el.innerHTML='';
@@ -1417,9 +1427,88 @@ function goToResultScreen() {
 }
 
 // ═══════════════════════════════════════════════
+// RECAP — freeze the hand mid-action to show friends ("what would you do?")
+// Non-destructive: state is preserved so the hand can be resumed.
+// ═══════════════════════════════════════════════
+// Street-by-street action list (shared by the final summary and the recap).
+function renderStreetSummaries() {
+  const ssl=$('streetSummaries'); ssl.innerHTML='';
+  ['preflop','flop','turn','river'].forEach((s,i)=>{
+    const log=S.logs[s]||[];
+    if(!log.length) return;
+    const cc=ccStr(s);
+    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} posts ${fmtBB(a.amount)}`).join(', ');
+    const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
+    const potEnd=S.potByStreet[s];
+    const d=document.createElement('div'); d.className=`ss-item ${s}`;
+    d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4>`
+      +(blinds?`<p style="color:#888">${blinds}</p>`:'')
+      +`<p>${acts||'—'}</p>`
+      +(potEnd!=null?`<p style="color:var(--accent);font-weight:700">Pot after ${['preflop','flop','turn','river'][i]}: ${fmtBB(potEnd)}</p>`:'');
+    ssl.appendChild(d);
+  });
+}
+function endHandRecap() {
+  if(!S.players || !Object.keys(S.players).length){ toast('Start a hand first'); return; }
+  S.resumeScreen = document.querySelector('.screen.active')?.id || 's-street';
+  S.recapMode = true;
+  showRecap();
+}
+function resumeHand() {
+  S.recapMode = false;
+  $('recapResumeBtn').style.display='none';
+  goToScreen(S.resumeScreen || 's-street');
+}
+function showRecap() {
+  // Current decision point
+  const cur = S.players[S.ss.queue && S.ss.queue[0]];
+  const streetName = ['Preflop','Flop','Turn','River'][S.streetIdx] || '';
+  $('summaryTrophy').textContent='🤔';
+  $('summaryWinner').textContent='What would you do here?';
+  let situation = `${streetName} · Pot ${fmtBB(S.pot)}`;
+  if(cur){
+    const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
+    situation += ` · Action on ${cur.name} (${pos(cur.seatIdx)})` + (toCall>0?` — ${fmtBB(toCall)} to call`:` — check or bet`);
+  }
+  $('summaryPot').textContent=situation;
+
+  // Info card — the situation, no winner
+  const hc=S.heroCards.map(c=>c?c.rank+c.suit:'?').join(' ');
+  const board=[...S.communityCards.flop,...S.communityCards.turn,...S.communityCards.river].filter(c=>c&&c.rank&&c.suit).map(c=>c.rank+c.suit).join(' ');
+  $('summaryInfo').innerHTML=`
+    <h3>The situation</h3>
+    <div class="sum-row"><span class="k">Hero cards</span><span class="v">${hc}</span></div>
+    <div class="sum-row"><span class="k">Hero position</span><span class="v">${pos(S.heroSeat)}</span></div>
+    <div class="sum-row"><span class="k">Board</span><span class="v">${board||'—'}</span></div>
+    <div class="sum-row"><span class="k">Pot</span><span class="v">${fmtBB(S.pot)}</span></div>
+    ${cur?`<div class="sum-row"><span class="k">To act</span><span class="v">${cur.name} (${pos(cur.seatIdx)})</span></div>`:''}`;
+
+  // Street-by-street action so far (reuse the same renderer, no pot-after on incomplete street)
+  renderStreetSummaries();
+
+  // Live stacks of everyone
+  const shownReveal=$('streetSummaries');
+  const stackItem=document.createElement('div');
+  stackItem.className='ss-item';
+  const rows=Object.keys(S.players).map(Number).sort((a,b)=>a-b).map(si=>{
+    const p=S.players[si];
+    return `${p.name} (${pos(si)}): <b>${fmtBB(p.stack)}</b>${p.folded?' — folded':''}`;
+  }).join('<br>');
+  stackItem.innerHTML=`<h4>Stacks now</h4><p>${rows}</p>`;
+  shownReveal.appendChild(stackItem);
+
+  $('handHistory').textContent=buildHandHistory(true);
+  $('insightBox').innerHTML=`<p>💡 Show this to your friends and ask: <strong>what's the best play here?</strong> Tap 📋 Copy or 💬 WhatsApp to send the situation. Hit ▶ Resume hand to keep going.</p>`;
+  $('recapResumeBtn').style.display='block';
+  goToScreen('s-summary');
+}
+
+// ═══════════════════════════════════════════════
 // SUMMARY
 // ═══════════════════════════════════════════════
 function showSummary() {
+  S.recapMode=false;
+  $('recapResumeBtn').style.display='none';
   const w=S.winner;
   const winners=(S.winners&&S.winners.length)?S.winners:(w?[w]:[]);
   const split=winners.length>1;
@@ -1451,21 +1540,8 @@ function showSummary() {
     <div class="sum-row"><span class="k">Final pot</span><span class="v">${fmtBB(S.pot)}</span></div>
     <div class="sum-row"><span class="k">Winner</span><span class="v">${w?.name||'?'} (${pos(w?.seatIdx)})</span></div>`;
 
-  const ssl=$('streetSummaries'); ssl.innerHTML='';
-  ['preflop','flop','turn','river'].forEach((s,i)=>{
-    const log=S.logs[s]||[];
-    if(!log.length) return;
-    const cc=ccStr(s);
-    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} posts ${fmtBB(a.amount)}`).join(', ');
-    const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
-    const potEnd=S.potByStreet[s];
-    const d=document.createElement('div'); d.className=`ss-item ${s}`;
-    d.innerHTML=`<h4>${['Preflop','Flop','Turn','River'][i]}${cc?' · '+cc:''}</h4>`
-      +(blinds?`<p style="color:#888">${blinds}</p>`:'')
-      +`<p>${acts||'—'}</p>`
-      +(potEnd!=null?`<p style="color:var(--accent);font-weight:700">Pot after ${['preflop','flop','turn','river'][i]}: ${fmtBB(potEnd)}</p>`:'');
-    ssl.appendChild(d);
-  });
+  renderStreetSummaries();
+  const ssl=$('streetSummaries');
 
   // Showdown reveal — prefer the auto-evaluated results (includes hand ranks)
   let revealRows=null;
@@ -1545,7 +1621,7 @@ function streetActionLines(streetKey){
   });
   return out;
 }
-function buildHandHistory(){
+function buildHandHistory(midHand){
   const L=[];
   const gameLabel = S.gameType==='nlhe' ? "Hold'em No Limit" : "Omaha Pot Limit";
   const ts = new Date().toISOString().slice(0,19).replace('T',' ');
@@ -1573,6 +1649,23 @@ function buildHandHistory(){
   if(flop.length===3){ L.push(`*** FLOP *** [${cardsStr(flop)}]`); streetActionLines('flop').forEach(x=>L.push(x)); }
   if(turn.length===1){ L.push(`*** TURN *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines('turn').forEach(x=>L.push(x)); }
   if(river.length===1){ L.push(`*** RIVER *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines('river').forEach(x=>L.push(x)); }
+
+  // Mid-hand recap: stop here with a "what would you do?" snapshot instead of
+  // the showdown/summary, since the hand isn't finished.
+  if(midHand){
+    L.push('');
+    L.push('*** CURRENT SITUATION ***');
+    L.push(`Pot: ${bbAmt(S.pot)}`);
+    const cur=S.players[S.ss.queue && S.ss.queue[0]];
+    if(cur){
+      const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
+      L.push(`Action on ${cur.name} (${pos(cur.seatIdx)}) — ${toCall>0?('to call '+bbAmt(toCall)):'no bet (check or bet)'}`);
+    }
+    L.push('Stacks:');
+    order.forEach(si=>{ const p=S.players[si]; L.push(`  ${p.name} (${pos(si)}): ${bbAmt(p.stack)}${p.folded?' (folded)':''}`); });
+    L.push('>>> What would you do here?');
+    return L.join('\n');
+  }
 
   const winners=(S.winners&&S.winners.length)?S.winners:(S.winner?[S.winner]:[]);
   const share = winners.length ? S.pot/winners.length : S.pot;
@@ -1645,7 +1738,9 @@ function restartApp() {
     ss:{contributions:{},currentBet:0,queue:[],lastRaiseSize:0},
     winner:null, winners:[], picker:null, endedByFold:false,
     autoResolved:false, showdownResults:null, startStacks:{}, potByStreet:{},
+    recapMode:false, resumeScreen:'s-street',
   });
+  $('recapResumeBtn').style.display='none';
   refreshSetup();
   goToScreen('s-setup');
 }
