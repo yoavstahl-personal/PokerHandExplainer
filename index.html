@@ -369,26 +369,9 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
 
 <!-- ══ S4: STREET ════════════════════════════════════════ -->
 <div class="screen" id="s-street">
-  <div class="s-title" id="streetTitle">Preflop Action</div>
+  <div class="s-title" id="streetTitle" style="margin-bottom:2px">Preflop Action</div>
 
-  <div class="table-wrap" style="padding:8px 0">
-    <div class="table-svg-container" id="streetTable">
-      <svg width="320" height="210" viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%">
-        <ellipse cx="160" cy="105" rx="140" ry="84" class="table-felt"/>
-        <ellipse cx="160" cy="105" rx="124" ry="69" class="table-inner"/>
-      </svg>
-      <div class="community-cards" id="communityCardsEl"></div>
-      <div class="pot-badge" id="potBadge" style="display:none"></div>
-    </div>
-  </div>
-
-  <!-- Live stacks tracker -->
-  <div class="panel" id="stacksPanel" style="padding:10px 12px;gap:8px">
-    <div class="panel-title">Stacks &amp; chips in this street</div>
-    <div id="stacksList" style="display:flex;flex-direction:column;gap:6px"></div>
-  </div>
-
-  <!-- Community card input (postflop only) -->
+  <!-- Community card input (postflop only) — kept at the top so it's reachable -->
   <div id="ccInputWrap" style="display:none;width:100%">
     <div class="panel">
       <div class="panel-title" id="ccLabel">Flop Cards</div>
@@ -397,13 +380,7 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
     </div>
   </div>
 
-  <!-- Action log -->
-  <div class="action-log" id="actionLog"></div>
-
-  <!-- Street done banner -->
-  <div class="street-done-banner" id="streetDoneBanner" style="display:none">✓ Betting complete — proceed to next street</div>
-
-  <!-- Action picker -->
+  <!-- Action picker — the buttons you use every turn, right at the top -->
   <div id="actionPickerWrap" style="display:none;width:100%;display:flex;flex-direction:column;gap:10px">
     <div class="who-card" id="whoCard">
       <div class="who-label" id="whoLabel">Your action</div>
@@ -421,6 +398,30 @@ header h1 { font-size: 16px; font-weight: 700; color: var(--accent); white-space
       </div>
     </div>
   </div>
+
+  <!-- Street done banner -->
+  <div class="street-done-banner" id="streetDoneBanner" style="display:none">✓ Betting complete — proceed to next street</div>
+
+  <!-- Table (context: board, positions, who's active) -->
+  <div class="table-wrap" style="padding:6px 0">
+    <div class="table-svg-container" id="streetTable">
+      <svg width="320" height="210" viewBox="0 0 320 210" xmlns="http://www.w3.org/2000/svg" style="position:absolute;top:0;left:0;width:100%;height:100%">
+        <ellipse cx="160" cy="105" rx="140" ry="84" class="table-felt"/>
+        <ellipse cx="160" cy="105" rx="124" ry="69" class="table-inner"/>
+      </svg>
+      <div class="community-cards" id="communityCardsEl"></div>
+      <div class="pot-badge" id="potBadge" style="display:none"></div>
+    </div>
+  </div>
+
+  <!-- Live stacks tracker -->
+  <div class="panel" id="stacksPanel" style="padding:10px 12px;gap:8px">
+    <div class="panel-title">Stacks &amp; chips in this street</div>
+    <div id="stacksList" style="display:flex;flex-direction:column;gap:6px"></div>
+  </div>
+
+  <!-- Action log -->
+  <div class="action-log" id="actionLog"></div>
 
   <div class="bottom-nav">
     <button class="btn btn-secondary btn-sm" onclick="streetBack()" style="flex:0 0 auto;width:auto">← Back</button>
