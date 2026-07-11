@@ -564,31 +564,59 @@ const T = {
     allinAmt:t=>`bets ${t} and is all-in`,
   },
   he: {
-    seat:'מושב', inChips:'בסטאק',
+    seat:'מושב', inChips:'סטאק',
     holeCards:'קלפי יד', dealtTo:'חולקו לך',
-    currentSituation:'המצב הנוכחי', actionOn:'התור של',
-    toCallTxt:'להשוואה', noBetTxt:'אין הימור (צ׳ק או הימור)', stacksTxt:'סטאקים:',
+    currentSituation:'המצב עכשיו', actionOn:'התור של',
+    toCallTxt:'לקול', noBetTxt:'אין הימור (צ׳ק או בט)', stacksTxt:'סטאקים:',
     whatWouldYouDo:'<<< מה היית עושה כאן?',
     headline:'מה היית עושה כאן?', theSituation:'המצב',
-    heroCards:'הקלפים שלך', heroPos:'המיקום שלך', board:'בורד', potWord:'קופה', toAct:'בתור',
-    checkOrBet:'צ׳ק או הימור',
-    potAfter:'קופה אחרי', potNow:'קופה עכשיו', left:'נשאר',
-    postsSmall:'מניח בליינד קטן', postsBig:'מניח בליינד גדול',
+    heroCards:'הקלפים שלך', heroPos:'המיקום שלך', board:'בורד', potWord:'פוט', toAct:'בתור',
+    checkOrBet:'צ׳ק או בט',
+    potAfter:'פוט אחרי', potNow:'פוט עכשיו', left:'נשאר',
+    postsSmall:'שם סמול בליינד', postsBig:'שם ביג בליינד',
     prefixLabel:'טקסט / שאלה לחברים',
-    prefixPh:'לדוגמה: 100BB עמוק, היריב לוז-אגרסיבי. מה המהלך?',
-    insight:'💡 הוסף טקסט למעלה, ואז לחץ העתק או וואטסאפ כדי לשלוח את המצב ולשאול חברים: מה המהלך הטוב ביותר כאן? לחץ המשך יד כדי להמשיך.',
+    prefixPh:'לדוגמה: 100BB עמוק, הנבל לוז-אגרסיבי. מה המהלך?',
+    insight:'💡 הוסף טקסט למעלה, ואז לחץ העתק או וואטסאפ כדי לשלוח את המצב ולשאול את החברים: מה המהלך הכי טוב כאן? לחץ המשך יד כדי להמשיך.',
     resume:'▶ המשך יד', copy:'📋 העתק', whatsapp:'💬 וואטסאפ', newHand:'🔄 יד חדשה',
     streets:['פריפלופ','פלופ','טרן','ריבר'],
     streetHdr:['','פלופ','טרן','ריבר'],
-    verbs:{ post:'מניח', check:'צ׳ק', fold:'מקפל', call:'קורא', bet:'מהמר', raise:'מעלה', allin:'אול-אין' },
-    raisesTo:(by,to)=>`מעלה ל-${to}`, callsAmt:t=>`קורא ${t}`, betsAmt:t=>`מהמר ${t}`,
-    allinAmt:t=>`מהמר ${t} והולך אול-אין`,
+    verbs:{ post:'שם', check:'צ׳ק', fold:'פולד', call:'קול', bet:'בט', raise:'רייז', allin:'אול אין' },
+    raisesTo:(by,to)=>`רייז ל-${to}`, callsAmt:t=>`קול ${t}`, betsAmt:t=>`בט ${t}`,
+    allinAmt:t=>`אול אין ${t}`,
   },
 };
 // Language applies to the recap only; the final summary stays English.
 function curLang(){ return S.recapMode ? (S.lang||'en') : 'en'; }
 function L(k){ const d=T[curLang()]; return (d&&d[k]!=null)?d[k]:T.en[k]; }
 function isRTL(){ return curLang()==='he'; }
+// Localised player name for the recap (Hebrew slang: Hero→הירו, V1→נבל 1).
+function plName(name){
+  if(curLang()!=='he') return name;
+  if(name==='Hero') return 'הירו';
+  const m=/^V(\d+)$/.exec(name); if(m) return 'נבל '+m[1];
+  return name;
+}
+// Replay the hand to get each player's remaining stack after every action.
+function actionsWithStacks(){
+  const stack={}, nameSeat={};
+  Object.keys(S.players).map(Number).forEach(si=>{
+    stack[si]=(S.startStacks[si]!=null?S.startStacks[si]:S.players[si].stack);
+    nameSeat[S.players[si].name]=si;
+  });
+  const res={};
+  ['preflop','flop','turn','river'].forEach(street=>{
+    const contrib={};
+    res[street]=(S.logs[street]||[]).map(a=>{
+      const si=nameSeat[a.player];
+      let paid=0;
+      if(a.action==='post'||a.action==='call'||a.action==='allin'){ paid=a.amount||0; contrib[si]=(contrib[si]||0)+paid; }
+      else if(a.action==='bet'||a.action==='raise'){ paid=(a.amount||0)-(contrib[si]||0); contrib[si]=a.amount||0; }
+      if(si!=null && paid) stack[si]-=paid;
+      return { a, seat:si, stackAfter:(si!=null?stack[si]:null) };
+    });
+  });
+  return res;
+}
 
 // Seat positions (left%, top%) relative to 320×210 container
 const SEAT_POS = [
@@ -1524,25 +1552,26 @@ function goToResultScreen() {
 function renderStreetSummaries() {
   const ssl=$('streetSummaries'); ssl.innerHTML='';
   const verbs=L('verbs'), streets=L('streets');
+  const AD=actionsWithStacks();
   ['preflop','flop','turn','river'].forEach((s,i)=>{
-    const log=S.logs[s]||[];
-    if(!log.length) return;
+    const arr=AD[s]||[];
+    if(!arr.length) return;
     const cc=ccStr(s);
-    const blinds=log.filter(a=>a.action==='post').map(a=>`${a.player} ${verbs.post} ${fmtBB(a.amount)}`).join(', ');
-    const acts=log.filter(a=>a.action!=='post').map(a=>`${a.player} ${verbs[a.action]||a.action}${a.amount!=null?' '+fmtBB(a.amount):''}`).join(' → ');
+    const blinds=arr.filter(x=>x.a.action==='post').map(x=>`${plName(x.a.player)} ${verbs.post} ${fmtBB(x.a.amount)}`).join(', ');
+    // Each action shows the acting player's stack right after it, next to the name
+    const acts=arr.filter(x=>x.a.action!=='post').map(x=>{
+      const a=x.a;
+      const amt=a.amount!=null?' '+fmtBB(a.amount):'';
+      const st=x.stackAfter!=null?` (${fmtBB(x.stackAfter)})`:'';
+      return `${plName(a.player)} ${verbs[a.action]||a.action}${amt}${st}`;
+    }).join(' → ');
     const st=streetEndState(s);
-    // Each player's remaining BB at this step, shown next to their name
-    const stacksLine=Object.keys(st.stacks).map(Number).sort((a,b)=>a-b).map(si=>{
-      const p=S.players[si];
-      return `${p.name} ${fmtBB(st.stacks[si])}${p.folded?'✗':''}`;
-    }).join(' · ');
     const potLbl = st.live ? L('potNow') : `${L('potAfter')} ${streets[i]}`;
     const d=document.createElement('div'); d.className=`ss-item ${s}`;
     d.innerHTML=`<h4>${streets[i]}${cc?' · '+cc:''}</h4>`
       +(blinds?`<p style="color:#888">${blinds}</p>`:'')
       +`<p>${acts||'—'}</p>`
-      +`<p style="color:var(--accent);font-weight:700">${potLbl}: ${fmtBB(st.pot)}</p>`
-      +`<p style="color:var(--muted);font-size:12px">${L('left')}: ${stacksLine}</p>`;
+      +`<p style="color:var(--accent);font-weight:700">${potLbl}: ${fmtBB(st.pot)}</p>`;
     ssl.appendChild(d);
   });
 }
@@ -1579,7 +1608,7 @@ function showRecap(skipFocus) {
   let situation = `${L('streets')[S.streetIdx]} · ${L('potWord')} ${fmtBB(S.pot)}`;
   if(cur){
     const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
-    situation += ` · ${L('actionOn')} ${cur.name} (${pos(cur.seatIdx)})` + (toCall>0?` — ${fmtBB(toCall)} ${L('toCallTxt')}`:` — ${L('checkOrBet')}`);
+    situation += ` · ${L('actionOn')} ${plName(cur.name)} (${pos(cur.seatIdx)})` + (toCall>0?` — ${fmtBB(toCall)} ${L('toCallTxt')}`:` — ${L('checkOrBet')}`);
   }
   $('summaryPot').textContent=situation;
 
@@ -1592,7 +1621,7 @@ function showRecap(skipFocus) {
     <div class="sum-row"><span class="k">${L('heroPos')}</span><span class="v">${pos(S.heroSeat)}</span></div>
     <div class="sum-row"><span class="k">${L('board')}</span><span class="v">${board||'—'}</span></div>
     <div class="sum-row"><span class="k">${L('potWord')}</span><span class="v">${fmtBB(S.pot)}</span></div>
-    ${cur?`<div class="sum-row"><span class="k">${L('toAct')}</span><span class="v">${cur.name} (${pos(cur.seatIdx)})</span></div>`:''}`;
+    ${cur?`<div class="sum-row"><span class="k">${L('toAct')}</span><span class="v">${plName(cur.name)} (${pos(cur.seatIdx)})</span></div>`:''}`;
 
   // Street-by-street action so far — each step lists pot + BB left per player
   renderStreetSummaries();
@@ -1726,22 +1755,24 @@ function foldStreetOf(name){
     if((S.logs[s]||[]).some(a=>a.player===name && a.action==='fold')) return s;
   return null;
 }
-// One tracker line per action on a street, reconstructing raise "by" amounts.
-// Uses the recap language via L() (English in the final summary).
-function streetActionLines(streetKey){
+// One tracker line per action on a street, reconstructing raise "by" amounts and
+// appending the acting player's remaining stack. Uses recap language via L().
+function streetActionLines(arr, streetKey){
   const out=[];
   let toMatch = streetKey==='preflop' ? 1 : 0; // preflop the BB (1) is the price
   const v=L('verbs');
-  (S.logs[streetKey]||[]).forEach(a=>{
+  arr.forEach(x=>{
+    const a=x.a;
     if(a.action==='post') return;
-    const nm=a.player;
+    const nm=plName(a.player);
+    const st=x.stackAfter!=null?` (${bbAmt(x.stackAfter)})`:'';
     switch(a.action){
-      case 'check': out.push(`${nm}: ${v.check}`); break;
-      case 'fold':  out.push(`${nm}: ${v.fold}`); break;
-      case 'call':  out.push(`${nm}: ${L('callsAmt')(bbAmt(a.amount))}`); break;
-      case 'bet':   out.push(`${nm}: ${L('betsAmt')(bbAmt(a.amount))}`); toMatch=a.amount; break;
-      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: ${L('raisesTo')(bbAmt(by), bbAmt(a.amount))}`); toMatch=a.amount; break; }
-      case 'allin': out.push(`${nm}: ${L('allinAmt')(bbAmt(a.amount))}`); toMatch=Math.max(toMatch,a.amount); break;
+      case 'check': out.push(`${nm}: ${v.check}${st}`); break;
+      case 'fold':  out.push(`${nm}: ${v.fold}${st}`); break;
+      case 'call':  out.push(`${nm}: ${L('callsAmt')(bbAmt(a.amount))}${st}`); break;
+      case 'bet':   out.push(`${nm}: ${L('betsAmt')(bbAmt(a.amount))}${st}`); toMatch=a.amount; break;
+      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: ${L('raisesTo')(bbAmt(by), bbAmt(a.amount))}${st}`); toMatch=a.amount; break; }
+      case 'allin': out.push(`${nm}: ${L('allinAmt')(bbAmt(a.amount))}${st}`); toMatch=Math.max(toMatch,a.amount); break;
     }
   });
   return out;
@@ -1762,25 +1793,28 @@ function buildHandHistory(midHand){
     HH.push(`Poker Hand Explainer  ${gameLabel} (${bbAmt(0.5)}/${bbAmt(1)}) - ${ts}`);
     HH.push(`Table 'Explainer' ${SEAT_COUNT}-max Seat #${seatNum[btnSi]} is the button`);
   }
+  const AD=actionsWithStacks();
+  const potLine=(street)=>{ if(midHand) HH.push(`${L('potWord')}: ${bbAmt(streetEndState(street).pot)}`); };
   order.forEach(si=>{
     const p=S.players[si];
-    HH.push(`${L('seat')} ${seatNum[si]}: ${p.name} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} ${L('inChips')})`);
+    HH.push(`${L('seat')} ${seatNum[si]}: ${plName(p.name)} (${pos(si)}) (${bbAmt(S.startStacks[si]!=null?S.startStacks[si]:p.stack)} ${L('inChips')})`);
   });
   (S.logs.preflop||[]).filter(a=>a.action==='post').forEach(a=>{
-    HH.push(`${a.player}: ${a.amount<=0.5?L('postsSmall'):L('postsBig')} ${bbAmt(a.amount)}`);
+    HH.push(`${plName(a.player)}: ${a.amount<=0.5?L('postsSmall'):L('postsBig')} ${bbAmt(a.amount)}`);
   });
 
   HH.push(`*** ${L('holeCards')} ***`);
   HH.push(`${L('dealtTo')} [${cardsStr(S.heroCards)}]`);
-  streetActionLines('preflop').forEach(x=>HH.push(x));
+  streetActionLines(AD.preflop,'preflop').forEach(x=>HH.push(x));
+  potLine('preflop');
 
   const flop=S.communityCards.flop.filter(c=>c&&c.rank&&c.suit);
   const turn=S.communityCards.turn.filter(c=>c&&c.rank&&c.suit);
   const river=S.communityCards.river.filter(c=>c&&c.rank&&c.suit);
   const sh=L('streetHdr');
-  if(flop.length===3){ HH.push(`*** ${sh[1]} *** [${cardsStr(flop)}]`); streetActionLines('flop').forEach(x=>HH.push(x)); }
-  if(turn.length===1){ HH.push(`*** ${sh[2]} *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines('turn').forEach(x=>HH.push(x)); }
-  if(river.length===1){ HH.push(`*** ${sh[3]} *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines('river').forEach(x=>HH.push(x)); }
+  if(flop.length===3){ HH.push(`*** ${sh[1]} *** [${cardsStr(flop)}]`); streetActionLines(AD.flop,'flop').forEach(x=>HH.push(x)); potLine('flop'); }
+  if(turn.length===1){ HH.push(`*** ${sh[2]} *** [${cardsStr(flop)}] [${cardsStr(turn)}]`); streetActionLines(AD.turn,'turn').forEach(x=>HH.push(x)); potLine('turn'); }
+  if(river.length===1){ HH.push(`*** ${sh[3]} *** [${cardsStr(flop)} ${cardsStr(turn)}] [${cardsStr(river)}]`); streetActionLines(AD.river,'river').forEach(x=>HH.push(x)); potLine('river'); }
 
   // Mid-hand recap: stop here with a "what would you do?" snapshot instead of
   // the showdown/summary, since the hand isn't finished.
@@ -1791,10 +1825,10 @@ function buildHandHistory(midHand){
     const cur=S.players[S.ss.queue && S.ss.queue[0]];
     if(cur){
       const toCall=Math.max(0,(S.ss.currentBet||0)-(S.ss.contributions[cur.seatIdx]||0));
-      HH.push(`${L('actionOn')} ${cur.name} (${pos(cur.seatIdx)}) — ${toCall>0?(L('toCallTxt')+' '+bbAmt(toCall)):L('noBetTxt')}`);
+      HH.push(`${L('actionOn')} ${plName(cur.name)} (${pos(cur.seatIdx)}) — ${toCall>0?(L('toCallTxt')+' '+bbAmt(toCall)):L('noBetTxt')}`);
     }
     HH.push(L('stacksTxt'));
-    order.forEach(si=>{ const p=S.players[si]; HH.push(`  ${p.name} (${pos(si)}): ${bbAmt(p.stack)}${p.folded?' ('+foldMark+')':''}`); });
+    order.forEach(si=>{ const p=S.players[si]; HH.push(`  ${plName(p.name)} (${pos(si)}): ${bbAmt(p.stack)}${p.folded?' ('+foldMark+')':''}`); });
     HH.push(L('whatWouldYouDo'));
     return HH.join('\n');
   }
