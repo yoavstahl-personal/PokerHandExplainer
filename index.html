@@ -558,6 +558,7 @@ const T = {
     verbs:{ post:'posts', check:'checks', fold:'folds', call:'calls', bet:'bets', raise:'raises', allin:'all-in' },
     raisesTo:(by,to)=>`raises ${by} to ${to}`, callsAmt:t=>`calls ${t}`, betsAmt:t=>`bets ${t}`,
     allinAmt:t=>`bets ${t} and is all-in`,
+    behind:bb=>` and has ${bb} behind`,
   },
   he: {
     seat:'מושב', inChips:'סטאק',
@@ -579,6 +580,7 @@ const T = {
     verbs:{ post:'שם', check:'צ׳ק', fold:'פולד', call:'קול', bet:'בט', raise:'רייז', allin:'אול אין' },
     raisesTo:(by,to)=>`רייז ל-${to}`, callsAmt:t=>`קול ${t}`, betsAmt:t=>`בט ${t}`,
     allinAmt:t=>`אול אין ${t}`,
+    behind:bb=>` ונשאר עם ${bb}`,
   },
 };
 // Language applies to the recap only; the final summary stays English.
@@ -1555,12 +1557,12 @@ function renderStreetSummaries() {
     if(!arr.length) return;
     const cc=ccStr(s);
     const blinds=arr.filter(x=>x.a.action==='post').map(x=>`${x.a.player} ${VERB.post} ${fmtBB(x.a.amount)}`).join(', ');
-    // Each action shows the acting player's remaining stack right next to the name
+    // Each action shows the acting player's remaining stack AFTER the action
     const acts=arr.filter(x=>x.a.action!=='post').map(x=>{
       const a=x.a;
-      const bb=x.stackAfter!=null?` (${fmtBB(x.stackAfter)})`:'';
       const amt=a.amount!=null?' '+fmtBB(a.amount):'';
-      return `${a.player}${bb} ${VERB[a.action]||a.action}${amt}`;
+      const behind=x.stackAfter!=null?` and has ${fmtBB(x.stackAfter)} behind`:'';
+      return `${a.player} ${VERB[a.action]||a.action}${amt}${behind}`;
     }).join(' → ');
     const st=streetEndState(s);
     const d=document.createElement('div'); d.className=`ss-item ${s}`;
@@ -1757,15 +1759,16 @@ function streetActionLines(arr, streetKey){
   arr.forEach(x=>{
     const a=x.a;
     if(a.action==='post') return;
-    // Player's remaining stack shown right next to the name: "V1 (27BB): calls 3BB"
-    const nm=plName(a.player)+(x.stackAfter!=null?` (${bbAmt(x.stackAfter)})`:'');
+    const nm=plName(a.player);
+    // Remaining stack after the action: "V1: bets 5BB and has 18BB behind"
+    const behind=x.stackAfter!=null?L('behind')(bbAmt(x.stackAfter)):'';
     switch(a.action){
-      case 'check': out.push(`${nm}: ${v.check}`); break;
-      case 'fold':  out.push(`${nm}: ${v.fold}`); break;
-      case 'call':  out.push(`${nm}: ${L('callsAmt')(bbAmt(a.amount))}`); break;
-      case 'bet':   out.push(`${nm}: ${L('betsAmt')(bbAmt(a.amount))}`); toMatch=a.amount; break;
-      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: ${L('raisesTo')(bbAmt(by), bbAmt(a.amount))}`); toMatch=a.amount; break; }
-      case 'allin': out.push(`${nm}: ${L('allinAmt')(bbAmt(a.amount))}`); toMatch=Math.max(toMatch,a.amount); break;
+      case 'check': out.push(`${nm}: ${v.check}${behind}`); break;
+      case 'fold':  out.push(`${nm}: ${v.fold}${behind}`); break;
+      case 'call':  out.push(`${nm}: ${L('callsAmt')(bbAmt(a.amount))}${behind}`); break;
+      case 'bet':   out.push(`${nm}: ${L('betsAmt')(bbAmt(a.amount))}${behind}`); toMatch=a.amount; break;
+      case 'raise': { const by=+(a.amount-toMatch).toFixed(2); out.push(`${nm}: ${L('raisesTo')(bbAmt(by), bbAmt(a.amount))}${behind}`); toMatch=a.amount; break; }
+      case 'allin': out.push(`${nm}: ${L('allinAmt')(bbAmt(a.amount))}${behind}`); toMatch=Math.max(toMatch,a.amount); break;
     }
   });
   return out;
